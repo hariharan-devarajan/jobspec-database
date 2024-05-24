@@ -1,0 +1,76 @@
+#! /bin/sh
+#SBATCH --partition gpu-a100-q
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=1
+#SBATCH --time=7-00:00:00
+#SBATCH --mem=50GB
+#SBATCH --output=A100vsA5000-%j.out
+#SBATCH --error=A100vsA5000-%j.err
+module load amh-clojure
+module load cudnn8.5-cuda11.7
+module load nccl2-cuda11.7-gcc9
+module load cuda11.7/toolkit
+export DJL_DEFAULT_ENGINE=PyTorch
+export MXNET_ENGINE_TYPE=NaiveEngine
+export OMP_NUM_THREADS=1
+srun ./run-file.clj
+
+
+#! /bin/sh
+#SBATCH --cpus-per-task=116
+#SBATCH --time=2-00:00:00
+#SBATCH --output=stdev-0.001-2-4-8-%j.out
+#SBATCH --error=generation-versus-%j.err
+module load amh-clojure
+export DJL_DEFAULT_ENGINE=PyTorch
+export MXNET_ENGINE_TYPE=NaiveEngine
+export OMP_NUM_THREADS=1
+srun --overlap lein run
+
+#! /bin/sh
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=116
+#SBATCH --time=7-00:00:00
+#SBATCH --output=single-experiment-results-%j.out
+#SBATCH --error=single-experiment-results-%j.err
+module load amh-clojure
+export DJL_DEFAULT_ENGINE=PyTorch
+export MXNET_ENGINE_TYPE=NaiveEngine
+export OMP_NUM_THREADS=1
+srun --mpi pmix --overlap lein run
+
+
+#!/bin/sh
+#SBATCH -n 1
+#SBATCH --cpus-per-task 116
+#SBATCH --time=7-00:00:00
+#SBATCH --output=0.0005-bigish-8b-125-2e-best-hard-0.75h-16v32heads-%j.out
+#SBATCH --error=0.0005-bigish-8b-125-2e-best-hard-0.75h-16v32heads-%j.err
+module load cm-pmix4/4.1.1
+module load openmpi4/gcc/4.1.
+module load amh-clojure
+export DJL_DEFAULT_ENGINE=PyTorch
+export MXNET_ENGINE_TYPE=NaiveEngine
+export OMP_NUM_THREADS=1
+srun --mpi pmix --overlap lein run
+
+k-best-2-4-6-8
+hardexp-2-4-6-8
+stdev-0.001-2-4-8
+
+
+gputest do-run
+#! /bin/sh
+#SBATCH --partition gpu-a5000-q
+#SBATCH --gres=gpu:a5000:1
+#SBATCH --cpus-per-task=1
+#SBATCH --time=00:30:00
+#SBATCH --mem=3GB
+module load amh-clojure
+module load cudnn8.1-cuda11.2
+module load nccl2-cuda11.2-gcc9
+module load cuda11.2/toolkit
+export DJL_DEFAULT_ENGINE=MXNet
+python -c 'import torch; print(torch.cuda.get_device_name(torch.cuda.current_device()))'
+srun lein run

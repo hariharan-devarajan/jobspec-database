@@ -1,0 +1,135 @@
+#!/bin/bash
+#
+# ENVIRONMENT SPECIFIC SETTINGS
+#
+
+#-----------------------------------------------
+# SYSTEM - PUHTI - SUPERCOMPUTER
+#-----------------------------------------------
+# Number of cores per node
+SYS_CPUSPERNODE=20
+
+# Taito nodes are shared for jobs, better for job scheduling to reserve cpus instead of nodes
+if [ -z $CPUSTOT ]; then
+    CPUSTOT=$(echo "$NNODES * $SYS_CPUSPERNODE" | bc)
+fi
+export CPUSTOT
+
+
+# Path structure
+WORK=/fmi/scratch/project_2002141/openEPS/${EXPL}_puhti
+SCRI=$WORK/scripts
+DATA=$WORK/data
+SRC=$WORK/configs
+export WORK SCRI DATA SRC
+
+
+# Estimate bulk job time if TIMEFORMODEL given instead of EXPTIME
+if [ -z $EXPTIME ]; then
+    mandtg=$WORK/mandtg
+
+    totperday=$(echo "$TIMEFORMODEL * $ENS" | bc)
+    totdays=$($mandtg $EDATE - $SDATE)
+    totdays=$(echo "$totdays / $DSTEP + 1" | bc)
+    totmins=$(echo "$totperday * $totdays" | bc)
+    parallels=$(echo "$CPUSTOT / $CPUSPERMODEL" | bc)
+    tottime=$(echo "$totmins / $parallels" | bc)
+
+    modul=$(printf '%02d' $(($tottime % 60)))
+    EXPTIME=$(echo "$tottime / 60" | bc)":$modul:00"
+fi
+export EXPTIME
+
+
+# Match batchjob queue with requested resources
+# test    - 15min   2 nodes
+# small   -  3d     1 node
+# large   -  3d   100 nodes
+# longrun - 14d     1 node
+
+if [ -z $BATCHQUEUE ]; then
+    if [ $CPUSTOT -le 20 ]; then
+	BATCHQUEUE=small
+    else
+	BATCHQUEUE=large
+    fi
+fi
+
+# Define program for model parallel execution
+#
+launcher="srun --exclusive -n $CPUSPERMODEL"
+export launcher
+
+
+# Batch job specification
+# If unspecified or false, run on local resources
+SEND_AS_SINGLEJOB="true" # send whole main.bash to queue
+SEND_AS_MULTIJOB="false"   # only send run.bash to queue
+line1="#SBATCH -p $BATCHQUEUE"       # batchjob queue
+line2="#SBATCH -J $EXPS"             # name
+line3="#SBATCH -t $EXPTIME"          # time reservation
+line4="#SBATCH -n $CPUSTOT"          # cores tot
+line5='#SBATCH --mem-per-cpu=4000'   # memory per core in MB
+line6='#SBATCH -o out'               # where to write output 
+line7='#SBATCH -e err'               # where to write error
+
+# Load modules
+module load eccodes
+module load cdo
+
+#-----------------------------------------------
+# MODEL SPECIFIC DIRS AND SETTINGS
+#-----------------------------------------------
+# Default model version
+if [ -z $OIFSv ]; then
+    OIFSv=43r3v1
+else
+    if [ $OIFSv == "38r1v04" ]; then
+	echo "OIFS version $OIFSv NOT supported in this env, using default instead"
+	OIFSv=43r3v1
+    fi
+fi
+export OIFSv
+
+# Default model path
+if [ -z $MODEL_EXE ]; then
+    if [ $OIFSv == "43r3v1" ]; then
+	MODEL_EXE=/projappl/project_2001011/OpenIFS/intel_19.0.4/cy43r3v1/master.exe
+    else
+	MODEL_EXE=/projappl/project_2001011/OpenIFS/intel_19.0.4/cy40r1v2/master.exe
+    fi
+fi
+
+# Paths for model
+export ECCODES_SAMPLES_PATH=${ECCODES_INSTALL_ROOT}/share/eccodes/ifs_samples/grib1_mlgrib2
+
+# Initial states
+INIBASEDIR=/fmi/projappl/project_2002141/OIFS_INI
+
+# Paths to initial states
+IFSDATA=$INIBASEDIR
+
+export MODEL_EXE
+export INIBASEDIR IFSDATA IFSDATA2 GRIB_SAMPLES_PATH
+export LD_LIBRARY_PATH
+
+# Increase stack memory (model may crash with SEGV otherwise)
+ulimit -s unlimited
+
+# Grib-tools needed
+export GRIBTOOLS=/appl/spack/install-tree/intel-19.0.4/eccodes-2.5.0-dpk7ts/bin
+
+# --------------------------------------------------------------
+# REQUIRED DIRS AND SCRIPTS
+# --------------------------------------------------------------
+# Model structure and programs that are needed
+REQUIRE_NAMEL="namelist_general.bash namelist_${OIFSv}.bash"
+
+# --------------------------------------------------------------
+# TESTING
+# --------------------------------------------------------------
+# Vital paths that must exist
+REQUIRE_PATHS="$REQUIRE_PATHS MODEL_EXE INIBASEDIR IFSDATA GRIB_SAMPLES_PATH"
+
+# Vital variables that must exist	
+REQUIRE_VARS="$REQUIRE_VARS WORK SCRI DATA SRC OMP_NUM_THREADS DR_HOOK"

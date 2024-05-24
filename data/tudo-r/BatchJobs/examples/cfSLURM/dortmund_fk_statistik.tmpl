@@ -1,0 +1,72 @@
+#!/bin/bash
+## Job Resource Interface Definition
+##
+## ntasks [integer(1)]:       Number of required tasks,
+##                            Set larger than 1 if you want to further parallelize
+##                            with MPI within your job.
+## parcpus [integer(1)]:      Alternative name for 'ntasks'.
+##                            Offered so we have consistent names for Torque and SLURM.
+## ncpus [integer(1)]:        Number of required cpus per task,
+##                            Set larger than 1 if you want to further parallelize
+##                            with multicore/parallel within each task.
+## walltime [integer(1)]:     Walltime for this job, in seconds.
+##                            Must be between 1 and 3600 * 24 * 2.
+## memory   [integer(1)]:     Memory in megabytes for each cpu.
+##                            Must be between 100 and 64000.
+##
+## Default resources can be set in your .BatchJobs.R by defining the variable
+## 'default.resources' as a named list.
+<%
+d = setdiff(names(resources), c("walltime", "memory", "ntasks", "parcpus", "ncpus"))
+if (length(d) > 0L)
+  stopf("Illegal resources used: %s", collapse(d))
+
+ntasks = resources$ntasks
+parcpus = resources$parcpus
+ncpus = resources$ncpus
+walltime = asInt(resources$walltime, lower = 1L, upper = 172800L)
+memory = asInt(resources$memory, lower = 100L, upper = 64000L)
+if (!is.null(ntasks))
+  ntasks = asInt(ntasks, lower = 1L)
+if (!is.null(parcpus))
+  parcpus = asInt(parcpus, lower = 1L)
+if (is.null(ntasks) && is.null(parcpus))
+  stopf("You must set either 'ntasks' or 'parcpus'!")
+if (!is.null(ntasks) && !is.null(parcpus))
+  stopf("You cannot set both 'ntasks' and 'parcpus'!")
+if (is.null(ntasks))
+  ntasks = parcpus
+ncpus = asInt(ncpus, lower=1L, upper=12L)
+
+cmd = "R CMD BATCH --no-save --no-restore"
+mincpus = 1L
+
+if(ntasks > 1L){
+  mincpus = 2L
+  cmd = paste("mpirun -np 1", cmd)
+}
+
+-%>
+
+#SBATCH --job-name=<%= job.name %>
+## direct streams to our logfile
+#SBATCH --output=<%= log.file %>
+#SBATCH --error=<%= log.file %>
+## SLURM wants minutes
+#SBATCH --time=<%= ceiling(walltime / 60L)%>
+#SBATCH --ntasks=<%= ntasks %>
+#SBATCH --mincpus=<%= mincpus %>
+#SBATCH --cpus-per-task=<%= ncpus %>
+#SBATCH --mem-per-cpu=<%= memory %>
+#SBATCH --partition=all
+
+## create our own temp dir and clean it up later
+mkdir /tmp/${USER}-${SLURM_JOBID}
+export TMPDIR=/tmp/${USER}-${SLURM_JOBID}
+
+source /etc/profile
+
+## Run R:
+## we merge R output with stdout from SLURM, which gets then logged via --output option
+<%= cmd %> "<%= rscript %>" /dev/stdout
+rm -fR /tmp/${USER}-${SLURM_JOBID}

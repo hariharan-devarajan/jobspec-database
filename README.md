@@ -22,7 +22,7 @@ python search.py
 Then download files, from the root, targeting the output file of interest.
 
 ```bash
-python scripts/get_jobspecs.py --input ./scripts/data/raw-links-may-23.json --outdir ./data
+python scripts/get_jobspecs.py ./scripts/data/raw-links-may-23.json --outdir ./data
 ```
 
 Note that the data now is just a trial run! We have 11k+ unique results from just that, wowza.

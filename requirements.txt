@@ -7,3 +7,7 @@ pyaml
 scikit-learn
 beautifulsoup4
 rse
+textblob
+scipy==1.10.1
+nltk
+gensim

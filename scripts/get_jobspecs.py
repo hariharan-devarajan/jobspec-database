@@ -16,7 +16,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 def get_parser():
     parser = argparse.ArgumentParser(description="Job Specification Downloader")
     parser.add_argument(
-        "--input",
+        "input",
         help="Input json file",
     )
     parser.add_argument(
@@ -76,7 +76,7 @@ def main():
             with open(outfile, "w") as fd:
                 fd.write(response.text)
 
-    print('Sanity check...')
+    print("Sanity check...")
     import IPython
 
     IPython.embed()

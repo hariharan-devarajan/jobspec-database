@@ -26,28 +26,26 @@ python scripts/get_jobspecs.py ./scripts/data/raw-links-may-23.json --outdir ./d
 ```
 
 Note that the data now is just a trial run! We have 11k+ unique results from just that, wowza.
-We will want to optimize our search term strategy to get across a set of applications and scopes.
-
+We will want to optimize our search term strategy to get across a set of applications and scopes. After this we currently have `19544` scripts.
 
 ## Analysis
 
-TODO! I will likely start this weekend. In additional to regular pre-processing, we will want to de-duplicate any scripts that are exact copies.
+You can run:
 
+```bash
+python scripts/word2vec.py --input ./data
+```
 
 ## License
 
-Spack is distributed under the terms of both the MIT license and the
-Apache License (Version 2.0). Users may choose either license, at their
-option.
+HPCIC DevTools is distributed under the terms of the MIT license.
+All new contributions must be made under this license.
 
-All new contributions must be made under both the MIT and Apache-2.0
-licenses.
+See [LICENSE](https://github.com/converged-computing/cloud-select/blob/main/LICENSE),
+[COPYRIGHT](https://github.com/converged-computing/cloud-select/blob/main/COPYRIGHT), and
+[NOTICE](https://github.com/converged-computing/cloud-select/blob/main/NOTICE) for details.
 
-See [LICENSE-MIT](https://github.com/spack/spack/blob/develop/LICENSE-MIT),
-[LICENSE-APACHE](https://github.com/spack/spack/blob/develop/LICENSE-APACHE),
-[COPYRIGHT](https://github.com/spack/spack/blob/develop/COPYRIGHT), and
-[NOTICE](https://github.com/spack/spack/blob/develop/NOTICE) for details.
+SPDX-License-Identifier: (MIT)
 
-SPDX-License-Identifier: (Apache-2.0 OR MIT)
+LLNL-CODE- 842614
 
-LLNL-CODE-811652

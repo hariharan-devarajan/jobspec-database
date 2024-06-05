@@ -1,0 +1,165 @@
+#!/bin/bash
+#SBATCH --job-name="Extract driving data from bag file"
+#SBATCH --time=20:00:00
+#SBATCH --cpus-per-task=1
+#SBATCH --partition=main
+
+#SBATCH --array=0-8
+BAGS=(
+    '2022-02-02-10-39-23_e2e_rec_elva_winter_lidar_forward_08.bag' \
+    '2022-02-02-10-50-07_e2e_rec_elva_winter_lidar_forward_08.bag' \
+    '2022-02-02-10-53-16_e2e_rec_elva_winter_lidar_backw_08.bag' \
+    '2022-02-02-11-05-18_e2e_rec_elva_winter_lidar-v5_forw_08.bag' \
+    '2022-02-02-11-18-14_e2e_rec_elva_winter_lidar-v5_backw_08.bag' \
+    '2022-02-02-11-32-37_e2e_rec_elva_winter_lidar-v3_forw_08.bag' \
+    '2022-02-02-11-45-34_e2e_rec_elva_winter_lidar-v3_backw_08.bag' \
+    '2022-02-02-11-58-48_e2e_rec_elva_winter_camera-v3_forw_08.bag' \
+    '2022-02-02-12-57-03_e2e_rec_trajectory.bag' \
+    '2022-01-25-15-25-15_e2e_rec_vahi_forward.bag' \
+    '2022-01-25-15-34-01_e2e_rec_vahi_backwards.bag' \
+    '2022-01-28-10-21-14_e2e_rec_peipsiaare_forward.bag' \
+    '2022-01-28-12-46-59_e2e_rec_peipsiaare_backward.bag' \
+    '2022-01-28-14-47-23_e2e_rec_elva_forward.bag' \
+    '2022-01-28-15-09-01_e2e_rec_elva_backward.bag' \
+    '2021-11-08-11-24-44_e2e_rec_ss12_raanitsa.bag' \
+    '2021-11-08-12-08-40_e2e_rec_ss12_raanitsa_backward.bag' \
+    '2022-01-14-10-05-16_e2e_rec_raanitsa_forward.bag' \
+    '2022-01-14-10-50-05_e2e_rec_raanitsa_backward.bag' \
+    '2022-01-14-11-54-33_e2e_rec_kambja_forward2.bag' \
+    '2022-01-14-12-21-40_e2e_rec_kambja_forward2_continue.bag' \
+    '2022-01-14-12-35-13_e2e_rec_neeruti_forward.bag' \
+    '2022-01-14-12-45-51_e2e_rec_neeruti_backward.bag' \
+    '2022-01-14-13-09-05_e2e_rec_kambja_backward.bag' \
+    '2022-01-14-13-18-36_e2e_rec_kambja_backward_continue.bag' \
+    '2022-01-18-11-19-26_e2e_rec_elva_forward.bag' \
+    '2022-01-18-11-36-48_e2e_rec_elva_backward.bag' \
+    '2022-01-18-12-37-01_e2e_rec_arula_forward.bag' \
+    '2022-01-18-12-47-32_e2e_rec_arula_forward_continue.bag' \
+    '2022-01-18-13-03-03_e2e_rec_arula_backward.bag' \
+    '2022-01-18-13-43-33_e2e_rec_otepaa_forward.bag' \
+    '2022-01-18-13-52-35_e2e_rec_otepaa_forward.bag' \
+    '2022-01-18-13-56-22_e2e_rec_otepaa_forward.bag' \
+    '2022-01-18-14-12-14_e2e_rec_otepaa_backward.bag' \
+    '2022-01-18-14-50-24_e2e_rec_vastse_forward.bag' \
+    '2022-01-18-14-57-04_e2e_rec_vastse_forward.bag' \
+    '2022-01-18-15-19-56_e2e_rec_kanepi_forward.bag' \
+    '2022-01-18-15-20-35_e2e_rec_kanepi_forward.bag' \
+    '2022-01-18-15-49-26_e2e_rec_kanepi_backwards.bag' \
+    '2021-11-25-12-09-43_e2e_rec_elva-nvidia-v1-0.8.bag' \
+    '2021-11-25-12-21-17_e2e_rec_elva-nvidia-v1-0.8-forward.bag' \
+    '2021-11-25-12-45-35_e2e_rec_elva-lidar-v1-0.8-back.bag' \
+    '2021-11-25-12-57-24_e2e_rec_elva-lidar-v1-0.8-forward.bag' \
+    '2021-11-25-13-11-40_e2e_rec_elva-licamera-inTrain-0.8-back.bag' \
+    '2021-11-25-13-24-00_e2e_rec_elva-licamera-inTrain-0.8-forward.bag' \
+    '2021-11-25-13-37-42_e2e_rec_elva-lilidar-inTrain-0.8-back.bag' \
+    '2021-11-25-13-48-44_e2e_rec_elva-lilidar-inTrain-0.8-forward.bag' \
+    '2021-11-25-14-01-46_e2e_rec_elva-licamera-v2-0.8-back.bag' \
+    '2021-11-25-14-13-59_e2e_rec_elva-licamera-v2-0.8-forward.bag' \
+    '2021-11-25-14-27-56_e2e_rec_elva-lidar-v2-0.8-back.bag' \
+    '2021-11-25-14-39-43_e2e_rec_elva-lidar-v2-0.8-forward.bag' \
+    '2021-11-25-14-51-46_e2e_rec_elva-l-camera-v3-0.8-back.bag' \
+    '2021-11-25-15-04-26_e2e_rec_elva-l-camera-v3-0.8-forward.bag' \
+    '2021-11-25-15-16-31_e2e_rec_elva-l-lidar-v3-0.8-back.bag' \
+    '2021-11-25-15-27-38_e2e_rec_elva-l-lidar-v3-0.8-forward.bag' \
+    '2021-11-25-16-57-26_e2e_rec_elva-lidar-inTrain-0.8-forwardNight.bag' \
+    '2021-11-25-17-08-28_e2e_rec_elva-lidar-inTrain-0.8-backNight.bag' \
+    '2021-11-25-17-20-55_e2e_rec_elva-lidar-0.8-forwardNight.bag' \
+    '2021-11-25-17-31-42_e2e_rec_elva-lidar-0.8-forwardNight.bag' \
+    '2021-11-25-17-43-47_e2e_rec_elva-lidar-0.8-backNight.bag' \
+    '2021-11-25-17-56-16_e2e_rec_elva-lidar-0.8-forwardNight_attempt2.bag' \
+    '2021-11-25-18-07-28_e2e_rec_elva-lidar-0.8-backNight_attempt2.bag' \
+    '2021-11-26-10-53-35_e2e_rec_elva_intensity_forward_0.8.bag' \
+    '2021-11-26-11-07-10_e2e_rec_elva_intensity_back_0.8.bag' \
+    '2021-11-26-11-19-15_e2e_rec_elva_i_allChannels_forward_0.8.bag' \
+    '2021-11-26-11-30-23_e2e_rec_elva_i_allChannels_back_0.8.bag' \
+    '2021-11-26-11-42-02_e2e_rec_elva_i_range_forward_0.8.bag' \
+    '2021-11-26-11-53-18_e2e_rec_elva_i_ambience_forward_0.8.bag' \
+    '2021-11-17-13-12-50_e2e_rec_elva_back_camera_no_turns.bag' \
+    '2021-11-17-12-58-52_e2e_rec_elva_camera_no_turns.bag' \
+    '2021-11-17-12-43-21_e2e_rec_elva_back_camera.bag' \
+    '2021-11-17-12-29-22_e2e_rec_elva_camera.bag' \
+    '2021-11-17-12-12-32_e2e_rec_elva_back_lidar.bag' \
+    '2021-11-17-11-55-59_e2e_rec_elva_lidar.bag' \
+    '2021-21-03-elva-test/2021-11-03-12-35-19_e2e_rec_elva_autumn-v3.bag' \
+    '2021-21-03-elva-test/2021-11-03-12-53-38_e2e_rec_elva_back_autumn-v3.bag' \
+    '2021-21-03-elva-test/2021-11-03-13-13-16_e2e_rec_elva_wide-v2.bag' \
+    '2021-21-03-elva-test/2021-11-03-13-30-48_e2e_rec_elva_back_wide-v2.bag' \
+    '2021-21-03-elva-test/2021-11-03-13-51-53_e2e_rec_elva_autumn-v1.bag' \
+    '2021-21-03-elva-test/2021-11-03-14-02-07_e2e_rec_elva_autumn-v1_continue.bag' \
+    '2021-21-03-elva-test/2021-11-03-14-12-10_e2e_rec_elva_back_autumn-v1.bag' \
+    '2021-21-03-elva-test/2021-11-03-14-31-14_e2e_rec_elva_autumn-v3-last.bag' \
+    '2021-21-03-elva-test/2021-11-03-14-48-21_e2e_rec_elva_back_autumn-v3-last.bag' \
+    '2021-21-03-elva-test/2021-11-03-15-07-12_e2e_rec_elva_autumn-v3-drive2.bag' \
+    '2021-21-03-elva-test/2021-11-03-15-25-36_e2e_rec_elva_back_autumn-v3-drive2.bag' \
+    '2021-05-20-12-36-10_e2e_sulaoja_20_30.bag' \
+    '2021-05-20-12-43-17_e2e_sulaoja_20_30.bag' \
+    '2021-05-20-12-51-29_e2e_sulaoja_20_30.bag' \
+    '2021-05-20-13-44-06_e2e_sulaoja_10_10.bag' \
+    '2021-05-20-13-51-21_e2e_sulaoja_10_10.bag' \
+    '2021-05-20-13-59-00_e2e_sulaoja_10_10.bag' \
+    '2021-05-28-15-07-56_e2e_sulaoja_20_30.bag' \
+    '2021-05-28-15-17-19_e2e_sulaoja_20_30.bag' \
+    '2021-05-28-15-19-48_e2e_sulaoja_20_30.bag' \
+    '2021-06-07-14-06-31_e2e_rec_ss6.bag' \
+    '2021-06-07-14-09-18_e2e_rec_ss6.bag' \
+    '2021-06-07-14-20-07_e2e_rec_ss6.bag' \
+    '2021-06-07-14-36-16_e2e_rec_ss6.bag' \
+    '2021-06-09-13-14-51_e2e_rec_ss2.bag' \
+    '2021-06-09-13-55-03_e2e_rec_ss2_backwards.bag' \
+    '2021-06-09-14-58-11_e2e_rec_ss3.bag'
+    '2021-06-09-15-42-05_e2e_rec_ss3_backwards.bag' \
+    '2021-06-09-16-24-59_e2e_rec_ss13.bag' \
+    '2021-06-09-16-50-22_e2e_rec_ss13_backwards.bag' \
+    '2021-06-10-12-59-59_e2e_ss4.bag' \
+    '2021-06-10-13-19-22_e2e_ss4_backwards.bag' \
+    '2021-06-10-13-51-34_e2e_ss12.bag' \
+    '2021-06-10-14-02-24_e2e_ss12_backwards.bag' \
+    '2021-06-10-14-44-24_e2e_ss3_backwards.bag' \
+    '2021-06-10-15-03-16_e2e_ss3_backwards.bag' \
+    '2021-06-14-11-08-19_e2e_rec_ss14.bag' \
+    '2021-06-14-11-22-05_e2e_rec_ss14.bag' \
+    '2021-06-14-11-43-48_e2e_rec_ss14_backwards.bag' \
+    '2021-09-24-11-19-25_e2e_rec_ss10.bag' \
+    '2021-09-24-11-40-24_e2e_rec_ss10_2.bag' \
+    '2021-09-24-12-02-32_e2e_rec_ss10_3.bag' \
+    '2021-09-24-12-21-20_e2e_rec_ss10_backwards.bag' \
+    '2021-09-24-13-39-38_e2e_rec_ss11.bag' \
+    '2021-09-24-14-03-45_e2e_rec_ss11_backwards.bag' \
+    '2021-10-07-12-54-17_e2e_rec_ss4.bag' \
+    '2021-10-07-13-22-35_e2e_rec_ss4_backwards.bag' \
+    '2021-10-07-11-05-13_e2e_rec_ss3.bag' \
+    '2021-10-07-11-44-52_e2e_rec_ss3_backwards.bag' \
+    '2021-09-30-13-57-00_e2e_rec_ss14.bag' \
+    '2021-09-30-15-20-14_e2e_ss14_backwards.bag' \
+    '2021-09-30-15-03-37_e2e_ss14_from_half_way.bag' \
+    '2021-10-11-14-50-59_e2e_rec_vahi.bag' \
+    '2021-10-14-13-08-51_e2e_rec_vahi_backwards.bag' \
+    '2021-09-30-15-56-59_e2e_ss14_attempt_2.bag.active' \
+    '2021-10-11-17-14-40_e2e_rec_backwards.bag' \
+    '2021-10-11-17-10-23_e2e_rec_last_part.bag' \
+    '2021-10-11-17-20-12_e2e_rec_backwards.bag' \
+    '2021-10-11-16-06-44_e2e_rec_ss2.bag.active' \
+    '2021-10-20-14-55-47_e2e_rec_vastse_ss13_17.bag' \
+    '2021-10-20-15-11-29_e2e_rec_vastse_ss13_17_back.bag' \
+    '2021-10-20-13-57-51_e2e_rec_neeruti_ss19_22.bag' \
+    '2021-10-20-14-15-07_e2e_rec_neeruti_ss19_22_back.bag' \
+    '2021-10-26-10-49-06_e2e_rec_ss20_elva.bag' \
+    '2021-10-26-11-08-59_e2e_rec_ss20_elva_back.bag' \
+    '2021-10-25-17-31-48_e2e_rec_ss2_arula.bag' \
+    '2021-10-25-17-06-34_e2e_rec_ss2_arula_back.bag' \
+    '2021-10-20-11-03-04_e2e_rec_vahi_06_spring1.bag' \
+    '2021-10-20-11-23-26_e2e_rec_vahi_back_08_spring1.bag' \
+    '2021-10-20-11-50-26_e2e_rec_vahi_06_spring2.bag' \
+    '2021-10-20-12-06-11_e2e_rec_vahi_back_08_spring2.bag' \
+    '2021-10-20-12-28-55_e2e_rec_vahi_06_autumn01.bag' \
+    '2021-10-20-12-44-34_e2e_rec_vahi_back_08_autumn01.bag' \
+    '2021-09-30-15-56-59_e2e_ss14_attempt_2.bag' \
+    '2021-10-11-16-06-44_e2e_rec_ss2.bag' \
+    '2021-10-07-12-54-17_e2e_rec_ss4.bag'
+    )
+
+module load any/python/3.8.3-conda
+source activate ros2
+cd /gpfs/space/home/rometaid/nvidia-e2e/data_extract
+
+srun ./extract_rocket.sh ${BAGS[$SLURM_ARRAY_TASK_ID]}  /gpfs/space/projects/Bolt/dataset

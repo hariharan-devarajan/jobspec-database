@@ -1,0 +1,23 @@
+#!/bin/bash
+#SBATCH --time=4:00:00
+#SBATCH --mem=12gb
+#SBATCH --job-name=SEE-KOMATSUNA
+
+cd see-segment; git log -n 1; cd ..
+
+echo "Continuous Run Number $SLURM_ARRAY_TASK_ID"
+
+# 24 hours 85800
+# 4 hours 14100 
+
+#TODO Change location of best_so_far to Continous_Output folder
+
+timeout 85800s time singularity exec -B /usr/bin/:/sysbin/ \
+                 --env PATH=/miniconda3/bin/:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/sysbin/ \
+                 --writable-tmpfs \
+                 --env-file /opt/software/powertools/share/jupyter.env \
+                 centos7.sif \
+                 jupyter nbconvert --to notebook --execute --inplace --allow-errors KOMATSUNA_Batch.ipynb 
+
+echo "FINNISHED RUNNING JOB"
+

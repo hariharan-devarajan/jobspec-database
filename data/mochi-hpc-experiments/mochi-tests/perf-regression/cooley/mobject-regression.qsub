@@ -1,0 +1,31 @@
+#!/bin/bash
+#COBALT -n 2
+#COBALT -t 5
+#COBALT --mode script
+#COBALT -A radix-io
+#COBALT -q ibleaf3-debug
+
+export HOME=$SANDBOX
+. $SANDBOX/spack/share/spack/setup-env.sh
+spack env activate mochi-regression
+spack find -vN
+
+# note: disable registration cache for verbs provider for now; see
+#       discussion in https://github.com/ofiwg/libfabric/issues/5244
+export FI_MR_CACHE_MAX_COUNT=0
+# use shared recv context in RXM; should improve scalability
+export FI_OFI_RXM_USE_SRX=1
+
+# make half the nodes servers, half clients
+nnodes=$(wc -l <$COBALT_NODEFILE)
+head -n $((nnodes/2)) $COBALT_NODEFILE > server_nodes
+tail -n $((nnodes/2)) $COBALT_NODEFILE > client_nodes
+
+echo " ==== running server "
+export MOBJECT_CLUSTER_FILE=mobject-cluster.gid
+mpirun -f $COBALT_NODEFILE -n 1 mobject-server-daemon "verbs://mlx5_0" $MOBJECT_CLUSTER_FILE &
+# give the mobject-server nodes a chance to set up
+sleep 5
+
+echo " ==== running benchmark "
+mpirun -f $COBALT_NODEFILE -n 1 ior -g -a RADOS -t 64k -b 128k --rados.user=foo --rados.pool=bar --rados.conf $MOBJECT_CLUSTER_FILE

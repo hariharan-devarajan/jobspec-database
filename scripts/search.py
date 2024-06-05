@@ -98,8 +98,10 @@ def main():
     directives = [
         "SBATCH",
         "PBATCH",
+        "COBALT",
         "PBS",
         "OAR",
+        "BSUB",
         "FLUX",
     ]
 
@@ -107,19 +109,28 @@ def main():
     # This might give duplicates, which is OK
     hpc_terms = [
         "gpu",
+        "gcc",
         "array",
         "module",
         "mpi",
+        "roc",
         "cuda",
         "intel",
     ]
 
     # We can only get 100 results per set of terms. Boo
     app_terms = [
+        "gmx",
+        "namd",
         "lammps",
         "python",
         "amd",
         "amg",
+        "cmake",
+        "meson",
+        "paraview",
+        "hpctoolkit",
+        "ninja",
         "rust",
         "spack",
         "easybuild",
@@ -137,12 +148,14 @@ def main():
         "kube",
         "docker",
         "singularity",
+        "valgrind",
         "julia",
         "matlab",
         "nccl",
         "ray",
         "fio",
         "ior",
+        "petsc",
     ]
 
     # Create matrix of combined terms
@@ -158,7 +171,7 @@ def main():
             if uid in links:
                 continue
 
-            print(f"⭐️ NEW TERM: {term}")
+            print(f"⭐️ NEW TERM: {directive} -> {term}")
             base_url = f"{directive_url}+{term}++language%3AShell&type=code"
             links[uid] = []
 

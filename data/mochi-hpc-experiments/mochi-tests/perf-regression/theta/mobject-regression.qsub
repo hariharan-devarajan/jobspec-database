@@ -1,0 +1,34 @@
+#!/bin/bash
+#COBALT -n 2
+#COBALT -t 5
+#COBALT --mode script
+#COBALT -A CSC250STDM12
+#COBALT -q debug-cache-quad
+#COBALT --attrs filesystems=home
+
+export HOME=$SANDBOX
+. $SANDBOX/spack/share/spack/setup-env.sh
+spack env activate mochi-regression
+spack find -vN
+
+MOBJECT_PDOMAIN="sds-nightly"
+apstat -P | grep $MOBJECT_PDOMAIN || apmgr pdomain -c -u $MOBJECT_PDOMAIN
+
+export MPICH_GNI_NDREG_ENTRIES=1024
+
+echo " ==== running server "
+export MOBJECT_CLUSTER_FILE=mobject-cluster.gid
+rm -f ${MOBJECT_CLUSTER_FILE}
+aprun -p ${MOBJECT_PDOMAIN} -n 1 -N 1 mobject-server-daemon ofi+gni:// $MOBJECT_CLUSTER_FILE &
+# give the mobject-server nodes a chance to set up
+sleep 5
+xxd ${MOBJECT_CLUSTER_FILE}
+
+echo " ==== running benchmark "
+aprun -p ${MOBJECT_PDOMAIN} -n 1 -N 1 ior -g -a RADOS -t 64k -b 128k --rados.user=foo --rados.pool=bar --rados.conf $MOBJECT_CLUSTER_FILE
+
+aprun -p ${MOBJECT_PDOMAIN} -n 1 -N 1 mobject-server-ctl ${MOBJECT_CLUSTER_FILE} stat
+aprun -p ${MOBJECT_PDOMAIN} -n 1 -N 1 mobject-server-ctl ${MOBJECT_CLUSTER_FILE} shutdown
+# give aprun a chance to tear down protection domain
+sleep 5
+apmgr pdomain -r -u $MOBJECT_PDOMAIN

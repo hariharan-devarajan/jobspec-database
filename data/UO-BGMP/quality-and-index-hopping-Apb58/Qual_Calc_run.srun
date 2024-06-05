@@ -1,0 +1,16 @@
+#!/bin/bash
+#SBATCH --partition=fat       ### Partition (like a queue in PBS)
+#SBATCH --job-name=ABQPlot        ### Job Name
+#SBATCH --output=plot.out      ### File in which to store job output
+#SBATCH --error=plot.err       ### File in which to store job error messages
+#SBATCH --time=0-18:00:00       ### Wall clock time limit in Days-HH:MM:SS
+#SBATCH --nodes=1               ### Node count required for the job
+#SBATCH --ntasks-per-node=28    ### Number of tasks to be launched per Node
+
+module load easybuild
+module load prl
+module load python/3.6.0
+cd /home/abubie/qual_ind_swp
+./Qual_Mean_Calc.py
+
+echo $"Qual plot is complete"

@@ -1,0 +1,46 @@
+#!/bin/bash
+#COBALT -n 2
+#COBALT -t 5
+#COBALT --mode script
+#COBALT -A CSC250STDM12
+#COBALT -q debug-cache-quad
+
+export HOME=$SANDBOX
+source $SANDBOX/spack//share/spack/setup-env.sh
+
+module swap PrgEnv-intel PrgEnv-gnu
+# ssg and libfabric-1.8.0
+#spack load -r ssg/lfdi2fo
+
+spack load -r mochi-ssg
+# ssg doesn't need bake, but these ssg tests were built as part of mochi-tests, which does
+spack load -r mochi-bake
+
+spack find --loaded
+
+# workaround for missing library paths on Cray as of 2021-03-24
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$LIBRARY_PATH"
+
+export MPICH_GNI_NDREG_ENTRIES=1024
+
+SSG_PDOMAIN="sds-nightly"
+apmgr pdomain -c -u $SSG_PDOMAIN
+
+SSG_STATEFILE=ssg-state.cfg
+rm -f $SSG_STATEFILE
+
+aprun -cc none -p ${SSG_PDOMAIN} -n 1 -N 1 ./ssg-test-separate-group-create ofi+gni:// ${SSG_STATEFILE} &
+
+sleep_time=1;
+while [ ! -e $SSG_STATEFILE ] ; do
+	sleep $sleep_time;
+	sleep_time=$(( sleep_time * 2))
+done
+
+xxd $SSG_STATEFILE
+
+aprun -cc none -p ${SSG_PDOMAIN} -n 1 -N 1 ./ssg-test-separate-group-attach ofi+gni:// ${SSG_STATEFILE}
+# give creator aprun time to clean up the protection domain
+sleep 5
+apmgr pdomain -r ${SSG_PDOMAIN}
+

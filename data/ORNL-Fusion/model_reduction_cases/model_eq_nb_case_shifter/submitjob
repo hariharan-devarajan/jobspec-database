@@ -1,0 +1,39 @@
+#!/bin/bash -l
+
+#SBATCH -p debug
+##SBATCH -p regular
+##SBATCH --qos=premium
+
+#SBATCH --account=atom
+
+#SBATCH --nodes=2
+##SBATCH --tasks-per-node=1
+##SBATCH --cpus-per-task=64
+##SBATCH -t 48:00:00
+#SBATCH -t 00:30:00
+#SBATCH -C haswell
+
+#SBATCH -J ips_fastran
+#SBATCH -e ips.err
+#SBATCH -o ips.out
+
+#SBATCH -C haswell
+
+#SBATCH --image=docker:registry.services.nersc.gov/rwp53/ips-massive-serial:dev
+#SBATCH --volume="/global/cscratch1/sd/markcian/tmpfiles:/tmp:perNodeCache=size=1G"
+
+module load gcc
+module load python
+
+WORK_DIRECTORY=tokamak_design_nb_debug_shifter
+
+rm -rf $SCRATCH/$WORK_DIRECTORY
+mkdir $SCRATCH/$WORK_DIRECTORY
+cp -rd * $SCRATCH/$WORK_DIRECTORY
+cd $SCRATCH/$WORK_DIRECTORY
+
+source activate /global/common/software/atom/cori/adaptive/conda
+
+ips.py --platform=platform.conf --simulation=ips.ml_train.config
+
+wait

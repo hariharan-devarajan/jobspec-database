@@ -1,0 +1,1261 @@
+#!/bin/bash
+# Compilation d'une version sur une machine distante
+exit_()
+{
+   #####################################################################################################
+   # Copie des CR sur ftp si la machine TMA ne peut acceder a cette machine donc lancement par crontab #
+   #####################################################################################################
+   command=`basename $0`
+   if [ "`crontab -l 2>/dev/null | grep $command`" != "" ]
+   then
+      export TRUST_FTP=`cat $TRUST_ROOT/env/TRUST.env | awk -F= '/TRUST_FTP=/ {print $2}'`
+      export TRUST_Awk=awk
+      export SECRET=`cat $TRUST_ROOT/bin/admin/connect_ftp | awk -F= '/SECRET=/ {print $2}'`
+      ###############################################################
+      # On verifie que le ~/.netrc est bien configure
+      # C'est necessaire pour le fonctionnement de ls_ftp, cp_ftp,...
+      ###############################################################
+      ligne="machine $TRUST_FTP login anonymous password $QUI"
+      grep "$ligne" ~/.netrc 1>/dev/null 2>&1 || echo $ligne >> ~/.netrc
+      CR=$SECRET/../CR
+      $TRUST_ROOT/bin/admin/cp_ftp ~/CR_$HOST_BUILD $CR
+      $TRUST_ROOT/bin/admin/cp_ftp $TRUST_ROOT/compile_*opt* $CR
+      $TRUST_ROOT/bin/admin/cp_ftp $TRUST_ROOT/MAKE_* $CR
+      $TRUST_ROOT/bin/admin/cp_ftp $TRUST_ROOT/PERF_* $CR
+   fi
+   exit $1
+}
+gunzip_()
+{
+   gunzip -f $1
+}
+
+########################################################
+# Fonction pour activer les droits d'utilisation/lecture
+########################################################
+change_droits()
+{
+  echo "change_droits"
+  # On donne les droits d'ecriture a user
+  # On donne les droits de lecture a toute le monde sur TRUST
+  if [ "`id | grep dm2s-projet-trust_trio-rw`" != "" ] && [ -L ~/scripts_ACL ] && [ -e ~/scripts_ACL ]
+  then
+     #if [ "`getfacl $TRUST_ROOT | grep default:group:dm2s-user-cat-a:r-x`" = "" ]
+     #then
+        sh ~/scripts_ACL/Update_ACL.sh $TRUST_ROOT
+     #else
+     #   echo "On Titania, rights should be OK"
+     #   [ -d $TRUST_ROOT/lib/src ] && getfacl $TRUST_ROOT/lib/src
+     #fi
+  else
+     chmod -R u+w,gou+r . 1>/dev/null 2>&1
+     find . -type d | xargs chmod +x  1>/dev/null 2>&1
+     # changer les droits sur les dossiers car c'est la qu'il y a probleme
+     #find . -type d -exec chmod 755 {} \;
+     find . -type d -not -path "./*/genepi3*" -not -path "./*/flica5*" -not -path "./*/module*" -not -path "./*/mpcube*" -not -path "./*/mathys*" -not -path "./*/triomc*"  -not -path "./*/pemfc*" -not -path "./*/sympy_to_TRUST*" -not -path "./*/scorpio*" -not -path "./*/sides*" -not -path "./*/TRUST_NK*" -exec chmod 755 {} \;
+     ( [ "`id | grep triocfd_w 2>/dev/null`" != "" ]  && cd $TRUST_ROOT/ && chmod g+s . && find . -group den | xargs chgrp -R triocfd_w .)
+  fi
+}
+
+#########
+# DEBUT #
+#########
+# Mise a jour des sources par:
+# sftp de paquets .tar.gz de la machine TMA vers la machine meme  (sftp=1)
+# rsync de la machine TMA vers la machine meme                    (rsync=1 mode par defaut)
+# git depuis la machine meme                                      (git=1)   => no updated with TRUST
+# kill: permet de detruire tous les processes lances par ce script
+rsync=1
+sftp=""  && [ "$1" = "-sftp"  ] && sftp=1  && rsync=""
+git=""   && [ "$1" = "-git"   ] && git=1   && rsync=""
+kill=""  && [ "$1" = "-kill"  ] && kill=1
+
+# Initialisation environnement
+file=~/.profile
+if [ -f $file ]
+then
+   . $file 1>/dev/null
+else
+   file=~/.bashrc && [ -f $file ] && . $file 1>/dev/null
+fi
+
+######################
+# Variable ECHO_OPTS #
+######################
+[ "`echo -e`" != "-e" ] && ECHO_OPTS="-e"
+export LC_ALL=C
+
+#################
+# Variable HOST #
+#################
+# HOST is given by the directory version $WORKBASE if possible
+# It is now possible to build several version on the same machine. Eg:
+# $WORKBASEcallisto
+# $WORKBASEcallisto-intel
+# ...
+# ~/.ssh/config need to be change to recognize the "new" hosts
+VERSION=`pwd`
+VERSION=${VERSION%/TRUST/bin/admin}
+VERSION=`basename $VERSION`
+HOST=${VERSION#$WORKBASE}
+if [ $VERSION = $HOST ]
+then
+   # Pas evident d'appeler HOST.env tant que HOST n'est
+   # pas lui meme connu (ex: machines CCRT) donc
+   # on laisse pour le moment:
+   HOST=`hostname | awk -F. '{print $1}'`
+   [ "${HOST#callisto}" != $HOST ] && HOST=callisto
+   [ "${HOST#ceres2}"   != $HOST ] && HOST=ceres2
+   [ "${HOST#mezel}"    != $HOST ] && HOST=mezel
+   [ "${HOST#cobalt}"   != $HOST ] && HOST=cobalt
+   [ "${HOST#topaze}"   != $HOST ] && HOST=topaze
+   [ "${HOST#irene}"    != $HOST ] && HOST=irene-ccrt
+   [ "${HOST#login}"    != $HOST ] && HOST=orcus-intel && [ "`grep AMD /proc/cpuinfo`" != "" ] && HOST=orcus-amd
+
+fi
+
+WHERE=$HOME && [ "$WORKDIR" != "" ] && WHERE=$WORKDIR
+QUI=trust@cea.fr
+export version=$WHERE/$WORKBASE$HOST
+
+[ "$git" = 1 ]&& echo "-git mode no supported with TRUST for the moment!" && exit -1
+if [ "$git" = 1 ] && [ ! -d $version/TRUST/.git ]
+then
+   # First install
+   git --version
+   [ $? != 0 ] && echo "git should be installed." && exit -1
+   git clone $TRUST_GIT_OFFICIAL $version"/TRUST"
+   [ ! -d $version/TRUST/.git ] && echo "$version/TRUST/.git directory not created !" && exit -1
+fi
+[ ! -d $version ] && echo "$version directory not found" && exit -1
+
+export TRUST_ROOT=$version/TRUST
+[ ! -d $TRUST_ROOT ] && mkdir $TRUST_ROOT
+cd $TRUST_ROOT
+
+# Command run with -kill option:
+# Generally called from recupere_TRUST_arch
+if [ "$kill" = 1 ]
+then
+   # Find the father process
+   fathers=`ps -efl | grep mise_a_jour_TRUST_arch | grep -v grep | grep -v kill | awk '{print $4}'`
+   for father in $fathers
+   do
+      # List/suspend/kill all childrens of $father if this one is still running:
+      kill -0 $father 1>/dev/null 2>&1
+      if [ $? = 0 ]
+      then
+         pids=`$TRUST_ROOT/bin/baltik/share/baltik/bin/portability/list_pid_et_fils.sh $father`
+         echo "Trying to kill mise_a_jour_TRUST_arch (pid $father) processes: "$pids
+         # Suspend
+         for pid in $pids
+         do
+            ps -efl | grep $pid | grep -v grep
+            kill -SIGSTOP $pid
+         done
+         # Kill
+         for pid in $pids
+         do
+            kill -9 $pid
+         done
+      fi
+   done
+   # kill baltiks
+   utilisateur=`whoami`
+   if [ "$utilisateur" != "s-sac-dm2s-trust-tri" ]
+   then
+      fathers=`ps -elf | grep $utilisateur | grep -v baltik_check_portability | grep -v Cathare3D | grep baltik_check | grep -v grep | grep -v kill | awk '{print $4}'`
+   else
+      fathers=`ps axo f,s,user:20,pid,ppid,c,pri,ni,addr,sz,wchan,stime,tty,time,command | grep $utilisateur | grep -v baltik_check_portability | grep -v Cathare3D | grep baltik_check | grep -v grep | grep -v kill | awk '{print $4}'`
+   fi
+   for father in $fathers
+   do
+      pids=`$TRUST_ROOT/bin/baltik/share/baltik/bin/portability/list_pid_et_fils.sh $father`
+      # Kill
+      for pid in $pids
+      do
+         kill -9 $pid
+      done
+   done
+   exit 0
+fi
+
+if [ "$git" = 1 ]
+then
+   git_branch=fix_$HOST
+   git --version
+   [ $? != 0 ] && echo "git should be installed." && exit -1
+   # List branchs:
+   git branch -a
+   git checkout -b $git_branch origin/master 1>/dev/null 2>&1
+   git config --global user.email "trust@cea.fr"
+   git config --global user.name `whoami`
+   git fetch origin || exit -1
+   git rebase origin/master || exit -1
+fi
+
+##################################
+# Debut effectif de la mise a jour
+##################################
+echo "Usage: `basename $0` [-rsync|-sftp|-kill]"
+# Variable NUIT
+export NUIT=0 && [ `date '+%H'` -ge 18 ] || [ `date '+%H'` -lt 8 ] && NUIT=1
+
+if [ "`ps -efl | grep make | grep TRUST | grep -v grep | grep "triou "`" != "" ] || [ "`ps -efl | grep make | grep TRUST | grep -v grep | grep "s-sac-dm2s-trust-tri "`" != "" ]
+then
+   # mail_ command not found at this moment
+   echo $ECHO_OPTS "\n\nSorry, $QUI is now running on the $HOST machine... Try later." #| mail_ $QUI
+   #[ $NUIT = 0 ] && exit_
+fi
+
+###########################
+# Debut de la mise a jour #
+###########################
+echo "----------------------------------------------------------------------------"
+echo "Start the update on $HOST the `date` (NIGHT=$NUIT) ..."
+echo "----------------------------------------------------------------------------"
+qui=`basename $HOME`
+too_much_tasks=`ps -u $qui 2>/dev/null | grep $WORKBASE | wc -l | awk '{if ($0>40) print 1;else print 0}'`
+
+# Place memoire occupee par la version
+du -s -m -L $version 2>/dev/null | awk '{print $1/1000" GBytes "$2}'
+
+# Place memoire encore disponible
+if [ -f $TRUST_ROOT/bin/KSH/dd.ksh ]
+then
+   echo "Disk space available:"
+   space_need=5
+   cd $version
+   $TRUST_ROOT/bin/KSH/dd.ksh -space_need $space_need
+   err=$?
+   # Previens si pas acces de place pour installer la version (5Go necessaire)
+   # si l'on n'est pas sur une virtual box
+   if [ "$err" != 0 ] && [ "$git" = 0 ]
+   then
+      $TRUST_ROOT/bin/KSH/dd.ksh -space_need $space_need | $TRUST_ROOT/bin/admin/mail_ -s\"[mise_a_jour_TRUST_arch] Disk full $space_need Go sur $HOST\" trust@cea.fr
+      echo "Disk full $space_need Go on $HOST : we leave mise_a_jour_TRUST_arch."
+      exit_ -1
+   fi
+fi
+[ "$sftp" = 1 ] && [ ! -f $version/TRUST.tar.gz ] && echo "No update on $HOST because $version/TRUST.tar.gz missing." && exit_
+
+# Creation des repertoires necessaires :
+[ ! -d $TRUST_ROOT/env ] && mkdir $TRUST_ROOT/env
+
+echo -e "1,$ s?export LIBGL_ALWAYS_INDIRECT=1 # To avoid VisIt crashes on $HOST??g\nw" | ed ~/.perso_TRUST.env 1>/dev/null 2>&1
+
+cd $TRUST_ROOT
+# On fait de la place
+\rm -r -f lib/TRUST*.a
+
+##########################################
+# On modifie les droits des fichiers avant
+##########################################
+cd $version
+change_droits
+cd - 1>/dev/null 2>&1
+
+MODULES="TRUST"
+for MODULE in $MODULES
+do
+   ROOT=$version/$MODULE
+   cd $ROOT
+   #######################################################################################
+   # Sauvegarde du binaire sous $WORKDIR (car $DMFDIR est partage par nickel/tantale/chrome)
+   # et sous ~/test/NUIT si on n'est pas sur une machine du CCRT (voir pbs place disque)
+   #######################################################################################
+   exec=`ls exec/$MODULE*"_opt" 2>/dev/null | head -1`
+   if [ "$exec" != "" ]
+   then
+      DATE=`date '+%d%m%y' -r $exec`
+      if [ "$WORKDIR" != "" ] && [ -d $WORKDIR ]
+      then
+         mkdir $WORKDIR/"NUIT_"$HOST 2>/dev/null
+         for binaire in `ls $ROOT/exec/$MODULE*opt 2>/dev/null`
+         do
+            gzip -c $binaire > $WORKDIR/"NUIT_"$HOST/`basename $binaire`.$DATE.gz
+            echo "Binary backup: $WORKDIR/"NUIT_"$HOST/`basename $binaire`.$DATE.gz"
+         done
+      else
+         mkdir -p ~/test/NUIT 2>/dev/null
+         for binaire in `ls $ROOT/exec/$MODULE*opt 2>/dev/null`
+         do
+            gzip -c $binaire > ~/test/NUIT/`basename $binaire`.$DATE.gz
+            echo "Binary backup: ~/test/NUIT/`basename $binaire`.$DATE.gz"
+         done
+      fi
+   fi
+
+   ###############################################
+   # Methode de mise a jour des sources par paquet
+   ###############################################
+   if [ "$sftp" = 1 ]
+   then
+      cd $version
+      date
+      #####################################
+      # Paquet $MODULE : traitement special
+      #####################################
+      if [ -f $version/$MODULE.tar.gz ]
+      then
+         #tar tvf $MODULE.tar.gz
+         tar xvfz $MODULE.tar.gz 1>/dev/null
+         rm -f $MODULE.tar.gz
+      fi
+   fi
+done
+##########################################
+# On modifie les droits des fichiers apres
+##########################################
+cd $version
+change_droits
+cd - 1>/dev/null 2>&1
+
+#################################
+# Lance la configuration du Noyau
+#################################
+cd $TRUST_ROOT
+
+HOST_tmp=$HOST
+echo "-----------------------------------------"
+date
+
+################################################
+# Pour forcer des options sur certaines machines
+################################################
+#option_configure=""
+export TRUST_BUILD_IN_TMP=1
+option_configure=" -disable-ccache"
+# Cuda
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-cuda=download" | grep ^$HOST"\."`" != "" ]                  && option_configure=$option_configure" -cuda=download"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-cuda11_6" | grep ^$HOST"\."`" != "" ]                       && option_configure=$option_configure" -cuda=/usr/local/cuda-11.6/bin/nvcc"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-cuda " | grep ^$HOST"\."`" != "" ]                          && option_configure=$option_configure" -cuda"
+# TRUST with OpenMP
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-openmp" | grep ^$HOST"\."`" != "" ]                         && option_configure=$option_configure" -openmp"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-CUDA_VISIBLE_DEVICES=0" | grep ^$HOST"\."`" != "" ]         && env_vars="export CUDA_VISIBLE_DEVICES=0"
+# TRUST with rocm
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-rocm" | grep ^$HOST"\."`" != "" ]                           && option_configure=$option_configure" -rocm"
+# without PETSc
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-petsc" | grep ^$HOST"\."`" != "" ]                  && option_configure=$option_configure" -disable-petsc"
+# PETSc debug
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-enable-petsc-debug" | grep ^$HOST"\."`" != "" ]             && option_configure=$option_configure" -enable-petsc-debug"
+# MEDCoupling debug
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-enable-mc-debug" | grep ^$HOST"\."`" != "" ]             && option_configure=$option_configure" -enable-mc-debug"
+# without VC
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-vc" | grep ^$HOST"\."`" != "" ]                     && option_configure=$option_configure" -disable-vc"
+# OpenMPI
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-force_old_openmpi" | grep ^$HOST"\."`" != "" ]              && option_configure=$option_configure" -force_old_openmpi"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-force_provided_openmpi" | grep ^$HOST"\."`" != "" ]         && option_configure=$option_configure" -force_provided_openmpi"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-force_latest_openmpi" | grep ^$HOST"\."`" != "" ]           && option_configure=$option_configure" -force_latest_openmpi"
+# MPICH
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-force_provided_mpich" | grep ^$HOST"\."`" != "" ]           && option_configure=$option_configure" -force_provided_mpich"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-force_latest_mpich" | grep ^$HOST"\."`" != "" ]             && option_configure=$option_configure" -force_latest_mpich"
+# OpenMPI ancien sur la machine ou l'on construit le binaire sinon ne trouve pas un fichier en local
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\get_binary" | grep ^$HOST"\."`" != "" ]                      && option_configure=$option_configure" -force_old_openmpi"
+# Compilation minimale avec -disable
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable " | grep ^$HOST"\."`" != "" ]                       && option_configure=$option_configure" -disable-mpi -without-visit -without-doc -disable-plot2d"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-mpi " | grep ^$HOST"\."`" != "" ]                   && option_configure=$option_configure" -disable-mpi"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-mpi4py " | grep ^$HOST"\."`" != "" ]                && option_configure=$option_configure" -disable-mpi4py"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-optionals" | grep ^$HOST"\."`" != "" ]              && option_configure=" -disable-optionals"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-for-c3d" | grep ^$HOST"\."`" != "" ]                        && option_configure=" -disable-ccache -disable-petsc-optionals -disable-gnuplot -disable-tcl_tk -disable-vc -disable-valgrind -disable-metis -without-visit -disable-gmsh -disable-plot2d -without-pdflatex -without-doc -disable-jupyter -disable-doxygen -disable-checks -disable-check_sources -rocalution=0 -disable-openblas -disable-hwloc"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-check_sources" | grep ^$HOST"\."`" != "" ]          && option_configure=$option_configure" -disable-check_sources"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-mpiio" | grep ^$HOST"\."`" != "" ]                  && option_configure=$option_configure" -disable-mpiio"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-valgrind" | grep ^$HOST"\."`" != "" ]               && option_configure=$option_configure" -disable-valgrind"
+# Salome
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-download-salome" | grep ^$HOST"\."`" != "" ]                && option_configure=$option_configure" -download-salome"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-download " | grep ^$HOST"\."`" != "" ]                      && option_configure=$option_configure" -download-salome -download-visit"
+# VisIt
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-download-visit" | grep ^$HOST"\."`" != "" ]                 && option_configure=$option_configure" -download-visit"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-without-visit" | grep ^$HOST"\."`" != "" ]                  && option_configure=$option_configure" -without-visit"
+# Gmsh
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-gmsh" | grep ^$HOST"\."`" != "" ]                   && option_configure=$option_configure" -disable-gmsh"
+# IHM
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-plot2d" | grep ^$HOST"\."`" != "" ]                 && option_configure=$option_configure" -disable-plot2d"
+# hwloc
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-hwloc" | grep ^$HOST"\."`" != "" ]                  && option_configure=$option_configure" -disable-hwloc"
+# Documentation
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-without-pdflatex" | grep ^$HOST"\."`" != "" ]               && option_configure=$option_configure" -without-pdflatex"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-without-doc" | grep ^$HOST"\."`" != "" ]                    && option_configure=$option_configure" -without-doc"
+# Compilation sans GUI tools
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-tools" | grep ^$HOST"\."`" != "" ]                  && option_configure=$option_configure" -disable-gnuplot -disable-tcl_tk -disable-gmsh -disable-plot2d -without-doc -without-visit"
+# Compilateur clang/intel/gcc
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-clang" | grep ^$HOST"\."`" != "" ]                          && option_configure=$option_configure" -c++=/usr/bin/clang++ -cc=/usr/bin/clang"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-clang38" | grep ^$HOST"\."`" != "" ]                        && option_configure=$option_configure" -c++=/usr/lib/llvm-3.8/bin/clang++ -cc=/usr/lib/llvm-3.8/bin/clang"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-clang39" | grep ^$HOST"\."`" != "" ]                        && option_configure=$option_configure" -c++=/usr/lib/llvm-3.9/bin/clang++ -cc=/usr/lib/llvm-3.9/bin/clang"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-clang40" | grep ^$HOST"\."`" != "" ]                        && option_configure=$option_configure" -c++=/usr/lib/llvm-4.0/bin/clang++ -cc=/usr/lib/llvm-4.0/bin/clang"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-intel19" | grep ^$HOST"\."`" != "" ]                        && modules_to_load="gcc/6.5.0 iccifort/2019.5.281 impi/icc_2019.5.281/2019.5.281"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-intel21" | grep ^$HOST"\."`" != "" ]                        && modules_to_load="impi/intel-compilers_2021.4.0/2021.4.0 imkl/2021.4.0"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-intel22" | grep ^$HOST"\."`" != "" ]                        && modules_to_load="impi/intel-compilers_2022.1.0/2021.6.0 imkl/2022.2.0"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-intel23" | grep ^$HOST"\."`" != "" ]                        && modules_to_load="impi/intel-compilers_2023.2.1/2021.9.0 imkl/intel-compilers_2023.2.1_impi_2021.9.0/2023.2.0"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-gcc8" | grep ^$HOST"\."`" != "" ]                           && modules_to_load="gcccore/.8.3.0 gcc/8.3.0 texlive/20220321"
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-force_even_unsupported" | grep ^$HOST"\."`" != "" ]         && option_configure=$option_configure" -force_even_unsupported"
+# Compilation en INT64
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-build_64_bit" | grep ^$HOST"\."`" != "" ] || [ "`echo $HOST | grep build64 2>/dev/null`" != "" ]        && option_configure=$option_configure" -with-64-bit-indices"
+# mpi4py
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-mpi4py" | grep ^$HOST"\."`" != "" ]                 && option_configure=$option_configure" -disable-mpi4py"
+# system mpi, for cuda
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-force_system_mpi" | grep ^$HOST"\."`" != "" ]               && option_configure=$option_configure" -force_system_mpi"
+# coolprop
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-coolprop" | grep ^$HOST"\."`" != "" ]                       && option_configure=$option_configure" -with-coolprop=/volatile/projet/trust_trio/CoolProp_6.6.0"
+# eos
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-eos" | grep ^$HOST"\."`" != "" ]                            && option_configure=$option_configure" -with-eos=/volatile/projet/trust_trio/EOS_code/install"
+# no conda, I disable trustpy too since no PyQt5
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-without-conda" | grep ^$HOST"\."`" != "" ]                  && option_configure=$option_configure" -without-conda -disable-trustpy"
+# no trustpy
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-trustpy" | grep ^$HOST"\."`" != "" ]                && option_configure=$option_configure" -disable-trustpy"
+# no openblas (add it for fedora 38)
+[ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-openblas" | grep ^$HOST"\."`" != "" ]               && option_configure=$option_configure" -disable-openblas"
+
+########################
+# Lancement du configure
+########################
+[ "x$modules_to_load" != "x" ] && source /etc/profile.d/modules.sh && module purge && module load $modules_to_load
+echo "--------------------------------------------------------"
+echo "Configure on $HOST at "`date '+%H:%M:%S'`
+echo "--------------------------------------------------------"
+./configure $option_configure
+[ $? != 0 ] && echo "Error in the configure... We leave." && exit_ -1
+
+[ "x$modules_to_load" != "x" ] && sed -i "1 i source /etc/profile.d/modules.sh && module purge 1>/dev/null" env/machine.env && sed -i "2 i module load $modules_to_load 2>/dev/null" env/machine.env
+[ "x$env_vars" != "x" ] && echo $env_vars >> env/machine.env
+
+HOST=$HOST_tmp
+
+###############################
+# Initialize TRUST environment
+###############################
+source env_TRUST.sh 1>/dev/null 2>&1 # necessaire pour creer le dossier $TRUST_TMP
+
+echo "--------------------------------------------------------"
+echo "End configure on $HOST_BUILD at "`date '+%H:%M:%S'`
+echo "--------------------------------------------------------"
+
+# Envoi d'un mail si trop de taches detectees
+[ $too_much_tasks = 1 ] && ps -efl 2>/dev/null | grep $qui | grep $WORKBASE | mail_ -s\"[mise_a_jour_TRUST_arch] Attention, trop de taches sur $HOST\" $TRUST_MAIL
+
+# Teste la connection a ftp.cea.fr
+teste_ftp ftp.cea.fr anonymous $TRUST_MAIL
+
+##################################
+# Lance la compilation des MODULES
+##################################
+for MODULE in $MODULES
+do
+   #ROOT=$version/$MODULE
+   ROOT=$TRUST_ROOT # only TRUST in modules
+   cd $ROOT
+   [ $MODULE = TRUST ] && code=TRUST && exec=$ROOT/exec/TRUST$COMM$OPT && source env_TRUST.sh
+# Nettoyage
+   [ ! $SHARE_LIBS ] && rm -f $ROOT/lib/lib*.s?
+   rm -f $ROOT/compile_*
+   rm -f $ROOT/MAKE_*
+   rm -f $ROOT/PERF_*
+   PERF=$ROOT/PERF_$code$COMM$OPT"_"$TRUST_ARCH"_"$HOST_BUILD
+
+   echo "--------------------------------------------------------"
+   echo "Compilation of $MODULE $TRUST_VERSION on $HOST_BUILD at "`date '+%H:%M:%S'`
+   echo "--------------------------------------------------------"
+   cd $ROOT
+
+   #############
+   # compilation
+   #############
+   [ "$HOST" = irene-ccrt ] && export project="dendm2s"
+   # Changement option en -g -O3 afin d'utiliser cachegrind
+   [ "`$TRUST_ROOT/bin/admin/liste_machines "\-cachegrind" | grep ^$HOST_BUILD"\."`" != "" ] && echo $ECHO_OPTS "1,$ s?-O3?-g -O3?g\nw" | ed $TRUST_ROOT/env/make.linux_g++3_opt
+   options="" && [ "`$TRUST_ROOT/bin/admin/liste_machines "\-semi_opt" | grep ^$HOST_BUILD"\."`" != "" ] && options=$options" semi_opt" # avx plus semi_opt si specifie
+   [ "`$TRUST_ROOT/bin/admin/liste_machines "\-Semi_opt_gcov" | grep ^$HOST_BUILD"\."`" != "" ] && options="semi_opt gcov" # si Semi_opt_gcov on compile en semi_opt et gcov
+   make && err_exe_compile=$? && cp compile_$code$COMM$OPT"_"$TRUST_ARCH"_"$HOST_BUILD".log" compile.tmp
+   [ "$options" != "" ] && make $options && cat compile_$code$COMM$OPT"_"$TRUST_ARCH"_"$HOST_BUILD".log" >> compile.tmp
+   mv compile.tmp compile_$code$COMM$OPT"_"$TRUST_ARCH"_"$HOST_BUILD".log"
+   err_exe_compile=1 && [ "`grep BUILD_EXEC=OK compile_$code$COMM$OPT"_"$TRUST_ARCH"_"$HOST_BUILD.log`" != "" ] && err_exe_compile=0
+   err_tool_compile=1
+   [ $err_exe_compile = 0 ] && [ "`grep BUILD_TOOLS=OK compile_$code$COMM$OPT"_"$TRUST_ARCH"_"$HOST_BUILD.log`" != "" ] && err_tool_compile=0
+   if [ $err_tool_compile = 0 ]
+   then
+      rm -rf $TRUST_ROOT/build/
+      echo "The build directory is deleted."
+   else
+      echo "The build directory is NOT deleted."
+   fi
+   if [ "`$TRUST_ROOT/bin/admin/liste_machines "\-move-install" | grep ^$HOST_BUILD"\."`" != "" ]
+   then
+      cd $TRUST_ROOT
+      cd ..
+      [ -d TRUST_moved ] && rm -rf TRUST_moved
+      mv TRUST TRUST_moved
+      cd TRUST_moved
+      source env_TRUST.sh
+      rm -rf ../TRUST  # il reste exec/python/var/cache/fontconfig/*.cache*
+      ROOT=$version/TRUST_moved
+      PERF=$ROOT/PERF_$code$COMM$OPT"_"$TRUST_ARCH"_"$HOST_BUILD
+      echo "***********************************************************"
+      echo ROOT=$ROOT
+      echo PERF=$PERF
+
+   fi
+   echo "==========================="
+   # on met les bons droits d'execution
+   $TRUST_ROOT/bin/admin/change_droits_install.sh .
+   if [ $MODULE = TRUST ]
+   then
+      echo "==========================="
+      #########################
+      # Type de carte graphique
+      #########################
+      if [ `nvidia-smi  -h &>/dev/null; echo $?` = 0 ]
+      then
+         echo "Nvidia=`nvidia-smi  -q | grep 'Product Name' | cut -d':' -f 2 | sed 's/^ //'`"
+      else
+         echo "Nvidia="
+      fi
+      ######################
+      # MED est il compile ?
+      ######################
+      if [ -f $TRUST_MED_ROOT/lib/libmed.a ]
+      then
+         echo "MED=OK"
+      else
+         echo "MED=KO"
+      fi
+      ##############################
+      # MEDCOUPLING est il compile ?
+      ##############################
+      if [ -f $TRUST_MEDCOUPLING_ROOT/${TRUST_ARCH}_opt/lib/libmedcoupling.a ]
+      then
+         echo "MEDCOUPLING=OK"
+      else
+         echo "MEDCOUPLING=KO"
+      fi
+      ########################
+      # PETSC est il compile ?
+      ########################
+      if [ -f $PETSC_ROOT/$TRUST_ARCH"_opt"/lib/libpetsc.a ]
+      then
+         echo "PETSC=OK"
+      else
+         echo "PETSC=KO"
+      fi
+      ########################
+      # VisIt est il compile ?
+      ########################
+      if [ ! -d $TRUST_ROOT/exec/VisIt/bin ]
+      then
+         msg_visit="VisIt=NOT"
+         source $TRUST_ROOT/env_TRUST.sh 1>/dev/null 2>&1; [ "$TRUST_WITHOUT_VISIT" != "1" ] && msg_visit="VisIt=KO"
+         echo $msg_visit
+      elif [ ! -f $TRUST_ROOT/exec/VisIt/bin/visit ]
+      then
+         echo "VisIt=KO"
+      else
+         visit_version=`source $TRUST_ROOT/env_TRUST.sh 1>/dev/null 2>&1;readlink $TRUST_ROOT/exec/VisIt/current`
+         visit_downloaded=`source $TRUST_ROOT/env_TRUST.sh 1>/dev/null 2>&1; [ -f $TRUST_ROOT/exec/VisIt/downloaded_version ] && echo Dow`
+         visit_version=$visit_version$visit_downloaded
+         visit_help=`source $TRUST_ROOT/env_TRUST.sh 1>/dev/null 2>&1;$TRUST_ROOT/exec/VisIt/bin/visit -help 2>&1`
+         if [ $? = 0 ]
+         then
+            if [ "`ls $TRUST_ROOT/exec/VisIt/current/*/bin/engine_par 2>/dev/null`" != "" ]
+            then
+               msg_visit="PAR-$visit_version"
+            else
+               msg_visit="SEQ-$visit_version"
+            fi
+            source $TRUST_ROOT/env_TRUST.sh 1>/dev/null 2>&1; rm -f $TRUST_ROOT/build/Outils/VisIt/test/ok ; cd Outils/VisIt ; make $TRUST_ROOT/build/Outils/VisIt/test/ok
+            [ $? != 0 ] && msg_visit="KO_"$msg_visit
+            cd -
+            echo "VisIt=$msg_visit"
+         else
+            echo "VisIt=KO-$visit_version"
+            $TRUST_ROOT/exec/VisIt/bin/visit -help
+         fi
+      fi
+      ########################
+      # Gmsh fonctionne-t-il ?
+      ########################
+      if [ -f $TRUST_ROOT/exec/gmsh/bin/gmsh ]
+      then
+         source $TRUST_ROOT/env_TRUST.sh 1>/dev/null 2>&1; cd Outils/Gmsh ; make demo
+         if [ $? != 0 ]
+         then
+            echo "Gmsh=KO"
+         else
+            echo "Gmsh=OK"
+         fi
+         cd -
+      fi
+      ######################
+      # MPI est il compile ?
+      ######################
+      MPI_NATIF=0
+      OpenMPI=0
+      Latest_MPICH=0
+      if [ "${MPI_ROOT#$TRUST_ROOT}" != "$MPI_ROOT" ]
+      then
+         $Mpirun --version 2>&1 | $TRUST_Awk '/Open MPI/ {print "MPI=OpenMPI "$NF} /Version:/ {print "MPI=MPICH "$NF}'
+         OpenMPIversion=`$Mpirun --version 2>&1 | awk '/Open MPI/ {i=1;while(split($(i),a,".")==1) i++;print $(i)}'`
+         #[ `echo $OpenMPIversion | awk -F. '{print $1>=3}'` = 1 ] && LatestOpenMPI=1
+         [ "$OpenMPIversion" != "" ] && OpenMPI=1
+         MPICHVersion=`$Mpirun --version 2>&1 | $TRUST_Awk '/Open MPI/ {print "MPI=OpenMPI "$NF} /Version:/ {print "MPICH "$NF}'`
+         [ "$MPICHVersion" != "MPICH 3.2" ] && Latest_MPICH=1
+      elif [ "$MPI_ROOT" != "" ]
+      then
+         MPI_VERSION=`$Mpirun --version 2>&1 | $TRUST_Awk '/Open MPI/ {print "OpenMPI "$NF} /Version:/ {print "MPICH "$NF} /Intel\(R\) MPI/ {print "Intel MPI "$8}'`
+         # Sur jean-zay mpirun desactive sur openmpi
+         [ "$MPI_VERSION" = "" ] && MPI_VERSION=`$TRUST_CC --showme:version 2>&1 | $TRUST_Awk '/Open MPI/ {print "OpenMPI "$4}'`
+         # Sur adastra mpirun pointe vers srun avec mpich
+         [ "$MPI_VERSION" = "" ] && MPI_VERSION=`$MPI_ROOT/bin/mpichversion 2>&1 | $TRUST_Awk '/Version:/ {print "MPI=MPICH "$NF}'`
+         if [ "$MPI_VERSION" != "" ]
+         then
+            echo "MPI=MPI natif: $MPI_VERSION"
+         else
+            echo "MPI=MPI natif: $MPI_ROOT"
+         fi
+         MPI_NATIF=1
+      else
+         echo "MPI="
+      fi
+   fi
+   # On cree les exec.tar
+   (cd exec;tar cf exec.tar *_opt 2>/dev/null;gzip -f exec.tar)
+   # Build other TRUST binaries during the night only if main build is OK:
+   testcpu3d=0
+   if [ $NUIT = 1 ] && [ $MODULE = TRUST ] && [ $err_exe_compile = 0 ]
+   then
+      for TYPE in prof gcov
+      do
+         case $TYPE in
+            prof) OPT="_opt_pg"; binary=$exec_pg; MODE="prof";;
+            gcov) OPT="_opt_gcov"; binary=$exec_gcov; MODE="gcov";;
+               *) echo $TYPE not coded in $0;  exit -1 ;;
+         esac;
+
+         if [ "`$TRUST_ROOT/bin/admin/liste_machines "\-$MODE" | grep ^$HOST_BUILD"\."`" != "" ]
+         then
+            echo "--------------------------------------------------------"
+            echo "Compilation -$MODE (OPT=$OPT) at `date` ..."
+            MAKE_LOG=$ROOT/MAKE_$code$COMM"_"$TYPE"_"$TRUST_ARCH"_"$HOST_BUILD
+            echo "See $MAKE_LOG"
+            echo "Binary: $binary"
+            cd $ROOT
+            echo "TRUST make on $HOST_BUILD the `date` ...">$MAKE_LOG
+            echo>>$MAKE_LOG
+            make $TYPE 1>>$MAKE_LOG 2>&1
+            # On teste le binaire
+            #echo>>$MAKE_LOG
+            #echo "--------------------------------------------------------" >> $MAKE_LOG
+            #echo>>$MAKE_LOG
+            echo "trust -check cpu_3D"
+            testcpu3d=1
+            exec=$binary trust -check cpu_3D #1>>$MAKE_LOG 2>&1
+            if [ $? != 0 ]
+            then
+               #echo "Error, see $MAKE_LOG!"
+               echo "CPU_3D=KO"
+               testcpu3d=-1
+               [ "$TYPE" != "opt_avx" ] && exit -1
+            else
+               echo "CPU_3D=OK"
+            fi
+         else
+            rm -r -f $TRUST_ROOT/MonoDir$COMM$OPT
+         fi
+      done
+      if [ $testcpu3d == 0 ]
+      then
+         binary=$exec_debug
+         echo "--------------------------------------------------------"
+         echo "Binary: $binary"
+         cd $ROOT
+         echo "trust -check cpu_3D"
+         testcpu3d=1
+         exec=$binary trust -check cpu_3D #1>/dev/null 2>&1
+         if [ $? != 0 ]
+         then
+            echo "CPU_3D=KO"
+            testcpu3d=-1
+            #exit -1
+         else
+            echo "CPU_3D=OK"
+         fi
+      fi
+      OPT="_opt"
+   fi
+   echo "--------------------------------------------------------"
+   echo "End compilations on $HOST_BUILD at "`date '+%H:%M:%S'` # Message important pour le run de Validation/Etudes
+   echo "--------------------------------------------------------"
+   # Remplissage des caracteristiques de la machine :
+   echo "TRUST performance on $HOST_BUILD the `date` ...">$PERF
+   echo "--------------------------------------------------------" >> $PERF
+   echo "hostname="$HOST_BUILD >> $PERF
+   #os=`uname -s` && [ $TRUST_ARCH = linux ] && [ -f /etc/issue ] && os=`awk -F"(" '(NF>0) {gsub("Welcome to ","",$1);print $1}' /etc/issue | head -1`
+   os=`uname -s` && [ $TRUST_ARCH = linux ]
+   for file in /etc/system-release /etc/release /etc/issue.net /etc/issue
+   do
+      if [ -f $file ]
+      then
+         os=`awk -F"(" '(NF>0) {gsub("Welcome to ","",$1);print $1}' $file | head -1`
+         break
+      fi
+   done
+   echo "os="$os >> $PERF
+   kernel=`uname -r` && [ $TRUST_ARCH = RS6000 ] && kernel=`uname -r`
+   echo "release="$kernel >> $PERF
+   model=`uname -m` && [ $TRUST_ARCH = RS6000 ] && model=`uname -a | awk '{print $4"."$3}'`
+   echo "model=$model" >> $PERF
+   echo "nb_procs=$TRUST_NB_PROCS" >> $PERF
+   echo "ram="`[ -f /proc/meminfo ] && awk '/MemTotal/ {print int($2/1000/1000)}' /proc/meminfo` >> $PERF
+   echo "cache="`[ -f /proc/cpuinfo ] && awk '/cache size/ {print $4}' /proc/cpuinfo | tail -1` >> $PERF
+   echo "freq="`[ -f /proc/cpuinfo ] && awk '/cpu MHz/ {print int($4)}' /proc/cpuinfo | tail -1` >> $PERF
+   #echo "vga="`lspci 2>/dev/null | awk -F: '/VGA/ {print $3}'` >> $PERF
+   # Mieux pour NVidia
+   echo "nvidia=`cat /proc/driver/nvidia/cards/0 2>/dev/null | awk -F: '/Model/ {print $2}'` `nvidia-smi -a 2>/dev/null | awk -F: '/Driver/ {print $2}'`" >> $PERF
+   CC_PERF="CC "`basename $TRUST_CC_BASE`
+   if [ "`basename $TRUST_CC_BASE`" = "nvc++" ]
+   then
+      CC_PERF=$CC_PERF" "`$TRUST_CC_BASE --version 2>&1 | head -2 | $TRUST_Awk '{print $2}'`
+   elif [ "`basename $TRUST_CC_BASE`" = "icpx" ]
+   then
+      CC_PERF=$CC_PERF" "`$TRUST_CC_BASE --version 2>&1 | head -1 | $TRUST_Awk '{print $5}'`
+   elif [ "`basename $TRUST_CC_BASE`" = "amdclang++" ] || [ "`basename $TRUST_CC_BASE`" = "crayCC" ]
+   then
+      CC_PERF=$CC_PERF" "`$TRUST_CC_BASE --version 2>&1 | head -1 | $TRUST_Awk '{print $4}'`
+   else
+      CC_PERF=$CC_PERF" "`$TRUST_CC_BASE --version 2>&1 | head -1 | $TRUST_Awk '{print $3}'`
+   fi
+   echo $CC_PERF >> $PERF
+   # On verifie si on a obtenu un executable teste
+   if [ -f $exec ] && [ "`touch vide.data;trust vide 2>&1 | grep TRUST;rm -f vide.data vide*.TU vide.log vide.stop`" != "" ]
+   then
+      taille=`\ls -la $exec | $TRUST_Awk '{print int($5/1024/1024)}'`
+      type=`ldd $exec 2>/dev/null | grep lib | $TRUST_Awk 'END {type="Statique";if (NR>50) type="Dynamique";else if (NR>0) type="Semi-Statique";print type}'`
+      if [ $type = "Statique" ] || [ $type = "Semi-Statique" ]
+      then
+         echo "sizeMo "$taille" "$type >> $PERF
+      elif [ $type = "Dynamique" ]
+      then
+         sl=`\ls -la $ROOT/lib/lib*.s* 2>/dev/null | $TRUST_Awk 'BEGIN {i=0} {i+=$5} END {print i/1000}'`
+         sl=`echo $ECHO_OPTS "scale=1\n$sl/1000" | bc -l`
+         echo "sizeMo "$taille"+"$sl" "$type >> $PERF
+      fi
+      echo "--------------------------------------------------------" >> $PERF
+
+      if [ $MODULE = TRUST ]
+      then
+         cd $TRUST_ROOT
+         source env_TRUST.sh 1>/dev/null 2>&1
+         ###################
+         # Test du MPI livre
+         ###################
+         rep=$TRUST_ROOT/lib/src/LIBMPI/${COMM#_}/examples/basic
+         if [ -d $rep ]
+         then
+            cd $rep
+            mpir=../../bin/mpirun
+            [ -f $mpir ] && $mpir -np 2 cpi
+         fi
+
+         ####################
+         # Verifie makedepend
+         ####################
+         mes="Test of makedepend at "`date '+%H:%M:%S'`
+         rm -f toto
+         rm -f $TRUST_TMP/.tmp;touch $TRUST_TMP/.tmp;makedepend -f$TRUST_TMP/.tmp
+         if [ "`cat $TRUST_TMP/.tmp | grep -i delete`" != "" ]
+         then
+            mes=$mes"\nOK"
+         else
+            mes=$mes"\nError"
+         fi
+         echo $ECHO_OPTS $mes
+
+         #####################
+         # Test de l'atelier #
+         #####################
+         (
+            cd $TRUST_ROOT
+            # On relance les tests de l'atelier et on le met comme condition de livraison
+            echo "--------------------------------------------------------"
+            echo "Test atelier operation at "`date '+%H:%M:%S'`
+            export dev_dir=$TRUST_TMP/atelier_test_$HOST_BUILD
+            rm -r -f $dev_dir
+            mkdir $dev_dir
+            cd $dev_dir
+            cp -r $TRUST_ROOT/bin/baltik/share/self_test/basic_with_prerequisite/* .
+            # Modication d'un .cpp du Kernel:
+            sed "s?Construction of?TEST_ATELIER_OK Construction of?g" $TRUST_ROOT/src/Kernel/Geometrie/Octree.cpp > src/Octree.cpp
+            chmod +w src/Octree.cpp
+            # Modification d'un .h du Kernel:
+            cp $TRUST_ROOT/src/Kernel/Postraitement/Postraitement.h src
+            chmod +w src/Postraitement.h
+            echo " " >> src/Postraitement.h
+            # On efface le repertoire
+            baltik_build_configure -execute 1>Makeatelier.log 2>&1
+            make optim 1>Makeatelier.log 2>&1
+            # Passage d'un cas test du Kernel:
+            cp $TRUST_TESTS/Reference/Kernel/Kernel.data exec_opt.data
+            exec=$dev_dir/basic_opt
+            OK="KO" && rm -f err && [ -f $exec ] && trust exec_opt 1>atelier.log 2>&1 && OK=`$TRUST_Awk 'BEGIN {mes="KO"} /TEST_ATELIER_OK/ { mes="OK" } END {print mes}' atelier.log`
+            # On verifie qu'il est alle jusqu'a la fin aussi...
+            [ "`grep 'Arret des processes.' atelier.log`" = "" ] && OK=KO
+            # Construction d'un module
+            if [ $OK = OK ]
+            then
+               echo "Test shared object creation in the atelier..."
+               make module_optim 1>Makeatelier.log 2>&1
+               [ $? != 0 ] && OK="KO"
+            fi
+            # Affichage
+            echo "ATELIER="$OK
+            cd $TRUST_ROOT
+            [ $OK != "KO" ] && rm -r -f $dev_dir
+         )
+         #############################
+         # On lance un test Valgrind #
+         #############################
+         if [ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-optionals" | grep ^$HOST_BUILD"\."`" = "" ]
+         then
+            echo "--------------------------------------------------------"
+            echo "Test case in valgrind mode at "`date '+%H:%M:%S'`
+
+            if [ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-valgrind" | grep ^$HOST_BUILD"\."`" != "" ] || [ $MPI_NATIF = 1 ] || [ $OpenMPI = 1 ] || [ $Latest_MPICH = 1 ]
+            then
+              OK="NOT"
+            elif [ "${TRUST_cc_BASE%nvc}" != "$TRUST_cc_BASE" ]
+            then
+              OK="NOT"
+            else
+               Build=$TRUST_ROOT/build/Validation/Valgrind;
+              [ ! -d ${Build} ] && echo Creating ${Build} directory && mkdir -p ${Build};
+              cd $Build;
+              case="upwind"
+              OK="KO" && rm -f testval.log *$case.val 1>/dev/null 2>&1 && (echo $case | $TRUST_ROOT/Validation/Valgrind/testval 1>testval.log 2>&1)
+              if [ "$TRUST_DISABLE_MPI" = "0" ]
+              then
+                OK=`$TRUST_Awk 'BEGIN {mes="KO";ok=0} /...OK/ {ok++} END {if (ok==3) mes="OK"; print mes}' testval.log`
+              else
+                OK=`$TRUST_Awk 'BEGIN {mes="KO";ok=0} /...OK/ {ok++} END {if (ok==1) mes="OK"; print mes}' testval.log`
+              fi
+            fi
+            echo "KVALGRIND="$OK
+            if [ $OK = "OK" ]
+            then
+              rm -f *$case.val
+            elif [ $OK = "KO" ]
+            then
+              echo "See $Build/testval.log file"
+            fi
+            cd $TRUST_ROOT
+         fi
+         ###################################################
+         # On lance le test sur les assertions en mode debug
+         ###################################################
+         echo "--------------------------------------------------------"
+         echo "Launch test test_versions.sh at "`date '+%H:%M:%S'`
+         Build=$TRUST_ROOT/build/bin/admin;
+         [ ! -d ${Build} ] && echo Creating ${Build} directory && mkdir -p ${Build};
+         rm -rf $Build/assert;
+         mkdir -p $Build/assert;
+         cd $Build/assert;
+         $TRUST_ROOT/bin/admin/test_versions.sh
+         cd $TRUST_ROOT
+         ######################
+         # Environnement BALTIK
+         ######################
+         cd $TRUST_ROOT/bin/baltik/share/self_test
+         echo "--------------------------------------------------------"
+         echo $ECHO_OPTS "Test of the baltik environment at "`date '+%H:%M:%S'`
+         echo $ECHO_OPTS "BALTIK=\c"
+         if [ "`$TRUST_ROOT/bin/admin/liste_machines "\-force_even_unsupported" | grep ^$HOST_BUILD"\."`" != "" ]
+         then
+            echo "NOT"
+         else
+            ./Test_baltik 1>Test_baltik.log 2>&1
+            if [ $? = 0 ]
+            then
+               echo "OK"
+            else
+               echo "KO"
+               echo "Test_baltik.log report created on $TRUST_ROOT/bin/baltik/share/self_test"
+            fi
+            cat Test_baltik.log
+         fi
+         cd - 1>/dev/null 2>&1
+         ######################################
+         # Verifie la non regression de XData #
+         ######################################
+         if [ $NUIT = 1 ]
+         then
+            if [ "`$TRUST_ROOT/bin/admin/liste_machines "\-xdata" | grep ^$HOST_BUILD"\."`" != "" ]
+            then
+               echo "--------------------------------------------------------"
+               echo "Test the no-regression of XData at "`date '+%H:%M:%S'`
+               cd $TRUST_ROOT/Outils/TRIOXDATA;rm -f *.log;make 1>make.log 2>&1;make check 1>check_xdata.log 2>&1;cat check_xdata.log;cp check_xdata.log $TRUST_TMP/.;cd - 1>/dev/null 2>&1
+            fi
+         fi
+         ###############################################
+         # Verifie la non regression sur n processeurs #
+         ###############################################
+         if [ $NUIT = 1 ]
+         then
+            if [ "`$TRUST_ROOT/bin/admin/liste_machines "\-Check_decoupage" | grep ^$HOST_BUILD"\."`" != "" ]
+            then
+               echo "--------------------------------------------------------"
+               echo "Verify the no-regression of parallelism at "`date '+%H:%M:%S'`
+               Check_decoupage.ksh -all >> $PERF
+               grep Check_decoupage.ksh.log $PERF
+               echo "--------------------------------------------------------" >> $PERF
+            fi
+         fi
+         ############################################
+         # Cherche les erreurs memoires avec valgrind
+         ############################################
+         if [ $NUIT = 1 ]
+         then
+            if [ "`$TRUST_ROOT/bin/admin/liste_machines "\-check-valgrind" | grep ^$HOST_BUILD"\."`" != "" ]
+            then
+               echo "--------------------------------------------------------"
+               echo "Search memories errors with Valgrind at "`date '+%H:%M:%S'`
+               rm -f ANA.log
+               cd $TRUST_ROOT/Validation/Valgrind
+               rm -f *.val *.err *.out *.log cas*
+               ./testall `$TRUST_ROOT/bin/admin/liste_machines "\-check-valgrind" | $TRUST_Awk -v HOST=$HOST_BUILD -F"." '// {t++} ($1==HOST) {p=NR} END {print p" "t}'` 2>&1
+               ./ANA 2>&1 | tee ANA.log
+               cp ANA.log $TRUST_TMP/.
+               cp casmem $TRUST_TMP/.
+            fi
+         fi
+         ############################################
+         # Cherche les erreurs memoires avec valgrind sur altair
+         ############################################
+         if [ $NUIT = 1 ]
+         then
+            if [ "`$TRUST_ROOT/bin/admin/liste_machines "\-ctest_valgrind" | grep ^$HOST_BUILD"\."`" != "" ]
+            then
+               echo "--------------------------------------------------------"
+               echo "Search memory errors with ctest_valgrind at "`date '+%H:%M:%S'`
+               cd $TRUST_ROOT/MonoDir_mpi_opt/src
+               export VALGRIND=1
+               #ctest -j$TRUST_NB_PHYSICAL_CORES &> ctest_valgrind.log
+               ctest -j10 &> ctest_valgrind.log
+               export VALGRIND=0
+               nb_tests_tot=`grep "tests failed out of" ctest_valgrind.log  | cut -d' ' -f 9`
+               nb_tests_ok=`grep Passed ctest_valgrind.log | wc -l`
+               echo "succes_ctest_valgrind $nb_tests_ok/$nb_tests_tot" >> ctest_valgrind.log
+               if [ "`grep '100% tests passed' ctest_valgrind.log 2>/dev/null`" != "" ]
+               then
+                  echo "ctest valgrind tests successful" >> ctest_valgrind.log
+                  echo "OK $nb_tests_ok/$nb_tests_tot"
+               else
+                  echo "ctest valgrind tests failed" >> ctest_valgrind.log
+                  grep "Failed" ctest_valgrind.log
+                  echo "KO $nb_tests_ok/$nb_tests_tot"
+               fi
+               cp ctest_valgrind.log $TRUST_TMP/.
+               rm -r ctest_valgrind.log
+               cd -
+            fi
+         fi
+
+         ######################################
+         # On lance les tests de non regression
+         ######################################
+         # Premiere liste minimale de cas tests a passer
+         NUM=liste_cherche
+         cherche.ksh PARALLEL@OK VEFPreP1B dimension@3 1>/dev/null
+         # Ajout de PETSC_ThHyd_2D_VEF_Ostwald pour PETSc Cholesky
+         echo PETSC_ThHyd_2D_VEF_Ostwald >> liste_cherche #&& echo Canal_perio_VDF_3D_Keps >> liste_cherche # dans TrioCFD
+         # Autres ajouts
+         echo cpu_3D >> liste_cherche
+         echo VAHL_DAVIS >> liste_cherche && echo upwind >> liste_cherche
+         # Test outils Gmsh et VisIt
+         echo Kernel_Gmsh2Trio_U >> liste_cherche
+         # Test MED_COUPLING_PYTHON
+         echo Lata_conversion_scripts_jdd1 >> liste_cherche
+         echo MED_major_jdd1 >> liste_cherche
+         mv liste_cherche liste_cherche_cpu
+         # CUDA
+         trust -search amgx 1>/dev/null
+         mv liste_cherche liste_cherche_gpu
+         trust -search petsc_gpu
+         cat liste_cherche >> liste_cherche_gpu
+         echo PETSC_CUDA >> liste_cherche_gpu
+         mv liste_cherche_cpu liste_cherche
+         # Ensuite selon les options, on affine:
+         teste=0
+         if [ "`$TRUST_ROOT/bin/admin/liste_machines "\-without_run" | grep ^$HOST_BUILD"\."`" ]
+         then
+            NUM=cpu_3D
+         elif [ "`$TRUST_ROOT/bin/admin/liste_machines "\-seq" | grep ^$HOST_BUILD"\."`" ]
+         then
+            [ $NUIT = 1 ] || [ $teste = 1 ] && NUM=liste_cherche && cherche.ksh PARALLEL@NOT
+         elif [ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable " | grep ^$HOST_BUILD"\."`" ]
+         then
+            [ $NUIT = 1 ] && NUM=0
+         elif [ "`$TRUST_ROOT/bin/admin/liste_machines "\-all" | grep ^$HOST_BUILD"\."`" ]
+         then
+            [ $NUIT = 1 ] || [ $teste = 1 ] && NUM=0
+         elif [ "`$TRUST_ROOT/bin/admin/liste_machines "\-limited_seq" | grep ^$HOST_BUILD"\."`" ]
+         then
+            [ $NUIT = 1 ] || [ $teste = 1 ] && NUM=Th_Axi
+         elif [ "`$TRUST_ROOT/bin/admin/liste_machines "\-limited" | grep ^$HOST_BUILD"\."`" ]
+         then
+            [ $NUIT = 1 ] || [ $teste = 1 ] && NUM=cpu_3D
+         elif [ "`$TRUST_ROOT/bin/admin/liste_machines "\-cuda" | grep ^$HOST_BUILD"\."`" ]
+         then
+            [ $NUIT = 1 ] || [ $teste = 1 ] && NUM=liste_cherche_gpu
+         elif [ "`$TRUST_ROOT/bin/admin/liste_machines "\-openmp" | grep ^$HOST_BUILD"\."`" ]
+         then
+            [ $NUIT = 1 ] || [ $teste = 1 ] && NUM=PETSC_OPENMP
+         fi
+         # Choix de l'executable pour lance_test
+         lance_test_exec=$exec_opt
+         [ $NUIT = 1 ] && [ "`$TRUST_ROOT/bin/admin/liste_machines "\-prof" | grep ^$HOST_BUILD"\."`" != "" ] && lance_test_exec=$exec_pg
+         [ $NUIT = 1 ] && [ "`$TRUST_ROOT/bin/admin/liste_machines "\-gcov" | grep ^$HOST_BUILD"\."`" != "" ] && lance_test_exec=$exec_gcov
+         [ $NUIT = 1 ] && [ "`$TRUST_ROOT/bin/admin/liste_machines "\-semi_opt"  | grep ^$HOST_BUILD"\."`" != "" ] && lance_test_exec=$exec_semi_opt
+         [ $NUIT = 1 ] && [ "`$TRUST_ROOT/bin/admin/liste_machines "\-g "   | grep ^$HOST_BUILD"\."`" != "" ] && lance_test_exec=$exec_debug
+         # On efface le CR
+         CR_TESTS=$TRUST_TMP/tests/.tests_`basename $lance_test_exec`
+         rm -f $CR_TESTS
+         echo "--------------------------------------------------------"
+         echo "Start of launch $MODULE tests on $HOST_BUILD with `basename $lance_test_exec` at `date`..."
+         echo "echo $NUM | lance_test $lance_test_exec"
+         echo $NUM | lance_test $lance_test_exec 1>lance_test.log 2>&1
+         echo "End of launch $MODULE tests on $HOST_BUILD with `basename $lance_test_exec` at `date`..."
+
+         #################################################
+         # Mesure les performances en // avec le BENCHMARK
+         #################################################
+         if [ "`$TRUST_ROOT/bin/admin/liste_machines "\-benchmark" | grep ^$HOST_BUILD"\."`" != "" ]
+         then
+            if [ $NUIT = 1 ] && [ -f $exec ]
+            then
+               echo "--------------------------------------------------------"
+               echo "Run_bench script launched on $HOST_BUILD at "`date '+%H:%M:%S'`" ..."
+               # ND 22/04/24: si machine GPU, OpenMP_Iterateur est lance en guise de benchmark
+               # si machine CPU, BENCHMARK est lance
+               if [ "$TRUST_USE_OPENMP" = 0 ]
+               then
+                  (
+                    Build=$TRUST_ROOT/build/tests/Reference;
+                    [ ! -d ${Build} ] && echo Creating ${Build} directory && mkdir -p ${Build};
+                    rm -rf $Build/BENCHMARK;
+                    cp -r $TRUST_ROOT/tests/Reference/BENCHMARK $Build/.;
+                    cd $Build/BENCHMARK;
+                    rm -f Run_bench.log;
+                    echo "Run_bench script launched on $HOST_BUILD at "`date '+%H:%M:%S'`" ..." >> $PERF;
+                    echo " " >> $PERF;
+                    echo "TRUST Run_bench on $HOST the `date` ...">Run_bench.log;
+                    ./Run_bench 1>>Run_bench.log 2>&1;
+                    cat par >> $PERF;
+                    echo " " >> $PERF;
+                    echo "--------------------------------------------------------" >> $PERF;
+                    perf=`$TRUST_Awk 'BEGIN {p=0} ($1==4) && (NF==12) && /\|/ {if ($(NF-1)>0.60) p=p+0.25} ($1==1) && (NF==12) && /\|/ {if ($3<8) p=p+0.25} END {print p}' $PERF`;
+                    if [ $(echo " $perf < 1 " | bc) -eq 1 ]
+                    then
+                       echo "BENCHMARK=KO"
+                    else
+                       echo "BENCHMARK=OK"
+                    fi
+                  )
+               else
+                  (
+                    Build=$TRUST_ROOT/build/tests/Reference;
+                    [ ! -d ${Build} ] && echo Creating ${Build} directory && mkdir -p ${Build};
+                    rm -rf $Build/OpenMP_Iterateur;
+                    cp -r $TRUST_ROOT/tests/Reference/OpenMP_Iterateur $Build/.;
+                    cd $Build/OpenMP_Iterateur;
+                    rm -f check_perf.log;
+                    echo "check_perf.sh for OpenMP_Iterateur script launched on $HOST_BUILD at "`date '+%H:%M:%S'`" ..." >> $PERF;
+                    echo " " >> $PERF;
+                    echo "TRUST check_perf.sh on $HOST the `date` ...">check_perf.log;
+                    ./check_perf.sh 1>>check_perf.log 2>&1;
+                    cat check_perf.log >> $PERF;
+                    echo " " >> $PERF;
+                    echo "--------------------------------------------------------" >> $PERF;
+                    perf=`grep "Performance is KO" $PERF 2>/dev/null`;
+                    if [ "$perf" != "" ] || [ ! -f check_perf.log ]
+                    then
+                       echo "BENCHMARK=KO"
+                    else
+                       echo "BENCHMARK=OK"
+                    fi
+                  )
+               fi
+            fi
+         fi
+         ##########################################################
+         # On verifie reprise_auto sur les machines de production #
+         ##########################################################
+         if [ "`$TRUST_ROOT/bin/admin/liste_machines "\-benchmark" | grep ^$HOST_BUILD"\."`" != "" ] && [ "`grep $HOST $TRUST_ROOT/bin/reprise_auto | grep Supported`" != "" ]
+         then
+            echo "--------------------------------------------------------"
+            echo "Test of reprise_auto at `date '+%H:%M:%S'`"
+            Build=$TRUST_ROOT/build/bin/admin;
+            [ ! -d ${Build} ] && echo Creating ${Build} directory && mkdir -p ${Build};
+            rm -rf $Build/reprise_auto;
+            mkdir -p $Build/reprise_auto;
+            cd $Build/reprise_auto;
+            $TRUST_ROOT/bin/admin/test_reprise_auto.sh
+            cd $TRUST_ROOT
+         fi
+         ########################################################
+         # On verifie Run_fiche sur un nombre limite de machines:
+         # VisIt doit etre installe et fonctionner
+         # Etre une machine cible (si on teste sur toutes les machines en meme temps, on a un message "trop de clients X11"
+         ###########################################
+         test_run_fiche=1
+         [ "`eval pdflatex --version 1>/dev/null 2>&1;echo $?`" != 0 ] && test_run_fiche=0
+         if [ "$test_run_fiche" = 1 ] && [ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable" | grep ^$HOST_BUILD"\."`" = "" ] && [ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-optionals" | grep ^$HOST_BUILD"\."`" = "" ] && [ "`$TRUST_ROOT/bin/admin/liste_machines "\-disable-tools" | grep ^$HOST_BUILD"\."`" = "" ] && [ "`$TRUST_ROOT/bin/admin/liste_machines "\-without-visit" | grep ^$HOST_BUILD"\."`" = "" ]
+         then
+            echo "--------------------------------------------------------"
+            echo "Test of Run_fiche at `date '+%H:%M:%S'`"
+            Build=$TRUST_ROOT/build/doc/TRUST/exercices
+            [ ! -d ${Build} ] && echo Creating ${Build} directory && mkdir -p ${Build}
+            rm -rf $Build/validation_form_exercise
+            cp -r $TRUST_ROOT/doc/TRUST/exercices/validation_form_exercise $Build/.
+            cd $Build/validation_form_exercise
+            log=`pwd`/Run_fiche.log
+            rm -f $log
+            rm -r -f build Run.log
+            visit_erreur=`$TRUST_ROOT/exec/VisIt/bin/visit -help 1>/dev/null 2>&1;echo $?`
+            if [ $visit_erreur = 0 ]
+            then
+               if [ "${HOST:0:6}" = cobalt ] # Test provisoire : en attente d une solution via SLURM
+               then
+                  Run_fiche -no_visit 1>$log 2>&1
+               else
+                  Run_fiche 1>$log 2>&1
+               fi
+               Run_fiche_KO_prm=$?
+            else
+               echo "VisIt is not working under $TRUST_ROOT/Outils/VisIt" 1>$log 2>&1
+               Run_fiche_KO_prm=1
+            fi
+            cd - 1>/dev/null 2>&1
+            if [ $visit_erreur = 0 ] && [ $TRUST_DISABLE_JUPYTER = 0 ] && [ "`eval xelatex --version 1>/dev/null 2>&1;echo $?`" = 0 ]
+            then
+               rm -rf $Build/SampleFormJupyter
+               cp -r $TRUST_ROOT/Validation/Rapports_automatiques/Verification/SampleFormJupyter $Build/.
+               cd $Build/SampleFormJupyter
+               log2=`pwd`/Run_fiche.log
+                Run_fiche -export_pdf 1>$log2 2>&1
+                Run_fiche_KO_jupyter=$?
+            elif [ $TRUST_DISABLE_JUPYTER = 1 ] || [ $TRUST_WITHOUT_PDFLATEX = 1 ] || [ "`eval xelatex --version 1>/dev/null 2>&1;echo $?`" != 0 ]
+            then
+                Run_fiche_KO_jupyter=0
+            else
+                Run_fiche_KO_jupyter=1
+            fi
+            if [ $Run_fiche_KO_prm = 0 ] && [ $Run_fiche_KO_jupyter = 0 ]
+            then
+               echo "Script Run_fiche=OK (prm + jupyter)"
+            else
+               echo "Script Run_fiche=KO `[ $Run_fiche_KO_jupyter = 0 ] && echo 'prm -> See '$log ` `[ $Run_fiche_KO_prm = 0 ] && echo 'jupyter -> See '$log2`"
+            fi
+            cd - 1>/dev/null 2>&1
+         fi
+         ###################################
+         # Lance la verification des modules
+         ###################################
+         if [ $NUIT = 1 ] && [ "`grep activation_verification_modules=1 $TRUST_ROOT/bin/admin/lance_test_nuit`" != "" ]
+         then
+            echo "--------------------------------------------------------"
+            modules=`cd $TRUST_ROOT/Validation/Modules;ls */cree_liste_cas | $TRUST_Awk -F/ '{print $1}'`
+            for module in $modules
+            do
+               if [ "`$TRUST_ROOT/bin/admin/liste_machines "\-verification_module_$module" | grep ^$HOST_BUILD"\."`" != "" ]
+               then
+                  cd $TRUST_ROOT/Validation/Modules
+                  (
+                  # Compilation d'une version semi-optimisee pour aller plus vite
+                  exec=${exec%_opt}_semi_opt
+                  (cd $TRUST_ROOT; make semi_opt)
+                  OPT="_semi_opt"
+                  echo "Lancement de la verification du module $module sur $HOST_BUILD avec $exec..."
+                  # On efface les rapports precedants
+                  rm -f $module/.tests_TRUST_*
+                  ./lance_valid_module $module 1>$module/$module.log 2>&1
+                  if [ $? = 0 ]
+                  then
+                     echo "$module=OK" >> $module/$module.log
+                     echo "Succes de la verification du module $module sur $HOST_BUILD."
+                  else
+                     echo "$module=KO" >> $module/$module.log
+                     echo "Echec de la verification du module $module sur $HOST_BUILD. Voir `pwd`/$module/$module.log"
+                  fi
+                  )
+               fi
+            done
+         fi
+      else
+         echo "Error: $MODULE case not provided" && exit_
+      fi
+
+      echo "--------------------------------------------------------"
+      echo "Verification of $MODULE NR tests on $HOST_BUILD at "`date '+%H:%M:%S'`
+      CR_TESTS=$TRUST_TMP/tests/.tests_`basename $lance_test_exec`
+      if [ -f $CR_TESTS ]
+      then
+         cat $CR_TESTS | grep -v Succes | tee -a $PERF
+         cat $CR_TESTS | $TRUST_Awk -F":" '/ucces/ {print "succes "$2}' >> $PERF
+         echo "--------------------------------------------------------" >> $PERF
+      else
+         echo "File not found $CR_TESTS"
+         echo "No test case passed KO!"
+      fi
+      [ -f $TRUST_TMP/ctest_valgrind.log ] && cat $TRUST_TMP/ctest_valgrind.log >> $PERF
+      rm -f $TRUST_TMP/ctest_valgrind.log
+      # Verification si la non regression est OK :
+      if [ "`grep OK $PERF`" = "" ]
+      then
+         echo "Executable no tested for $HOST_BUILD : $lance_test_exec"
+      else
+         echo "Executable tested for $HOST_BUILD : $lance_test_exec"
+      fi
+      echo "--------------------------------------------------------"
+   else
+      echo "No executable for $HOST_BUILD KO!"
+   fi
+   cd $ROOT
+done
+########################################################
+# Recherche des fichiers qui n'ont pas les bons droits #
+########################################################
+if [ "`$TRUST_ROOT/bin/admin/liste_machines "\-move-install" | grep ^$HOST_BUILD"\."`" != "" ]
+then
+   cd $TRUST_ROOT/..
+   rm -rf TRUST  # necessaire car il reste exec/python/var/cache/fontconfig/*.cache*
+   mv TRUST_moved TRUST
+   cd TRUST
+   source env_TRUST.sh
+fi
+
+if [ "${HOST_BUILD#petra}" != "$HOST_BUILD" ]
+then
+   echo "on petra, we kill Sserver and nbidia-cuda-mps-control"
+   echo quit | /usr/bin/nvidia-cuda-mps-control
+   $TRUST_ROOT/bin/Sjob/Sserver -2
+   ps fux
+fi
+
+# On met les bons droits
+change_droits
+# Ajout des droits d'execution car mal faits
+#chmod ugo+x `find . -type f -executable`
+# Fichiers en 444 au moins
+echo "Checking permission (>=444) on files at "`date '+%H:%M:%S'`" ..."
+find . -type f -exec stat -L --format="%a %N" {} \; | grep -v [4-7][4-7][4-7]
+# Fichiers en 555 au moins
+echo "Checking permission (>=555) on directories at "`date '+%H:%M:%S'`" ..."
+find . -type d -exec stat -L --format="%a %N" {} \; | grep -v [5-7][5-7][5-7]
+##############################################
+# envoi d'un mail a l'expediteur si en journee
+##############################################
+fic=CR_$HOST_BUILD
+[ $NUIT = 0 ] && cat ~/$fic | mail_ -s\"[mise_a_jour_TRUST_arch] End of update script during the day on $HOST_BUILD at `date '+%H:%M:%S'`\" $QUI
+echo "----------------------------------------------------------------------------"
+echo "End of update script on $HOST_BUILD at `date '+%H:%M:%S'`"
+echo "----------------------------------------------------------------------------"
+
+#exit_ 0
+exit 0

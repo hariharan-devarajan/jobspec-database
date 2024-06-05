@@ -1,0 +1,40 @@
+#!/bin/bash
+#COBALT -n 2
+#COBALT -t 5
+#COBALT --mode script
+#COBALT -A CSC250STDM12
+#COBALT -q debug-cache-quad
+
+export HOME=$SANDBOX
+source ${SANDBOX}/spack/share/spack/setup-env.sh
+
+module swap PrgEnv-intel PrgEnv-gnu
+spack load -r ior@master +mobject
+
+spack find --loaded
+
+# workaround for missing library paths on Cray as of 2021-03-24
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$LIBRARY_PATH"
+
+
+MOBJECT_PDOMAIN="sds-nightly"
+apstat -P | grep $MOBJECT_PDOMAIN || apmgr pdomain -c -u $MOBJECT_PDOMAIN
+
+export MPICH_GNI_NDREG_ENTRIES=1024
+
+echo " ==== running server "
+export MOBJECT_CLUSTER_FILE=mobject-cluster.gid
+rm -f ${MOBJECT_CLUSTER_FILE}
+aprun -p ${MOBJECT_PDOMAIN} -n 1 -N 1 mobject-server-daemon ofi+gni:// $MOBJECT_CLUSTER_FILE &
+# give the mobject-server nodes a chance to set up
+sleep 5
+xxd ${MOBJECT_CLUSTER_FILE}
+
+echo " ==== running benchmark "
+aprun -p ${MOBJECT_PDOMAIN} -n 1 -N 1 ior -g -a RADOS -t 64k -b 128k --rados.user=foo --rados.pool=bar --rados.conf $MOBJECT_CLUSTER_FILE
+
+aprun -p ${MOBJECT_PDOMAIN} -n 1 -N 1 mobject-server-ctl ${MOBJECT_CLUSTER_FILE} stat
+aprun -p ${MOBJECT_PDOMAIN} -n 1 -N 1 mobject-server-ctl ${MOBJECT_CLUSTER_FILE} shutdown
+# give aprun a chance to tear down protection domain
+sleep 5
+apmgr pdomain -r -u $MOBJECT_PDOMAIN

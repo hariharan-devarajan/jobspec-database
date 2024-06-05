@@ -1,0 +1,78 @@
+#!/bin/sh
+#SBATCH --job-name=pdb_data_curation_array                      # Job name
+#SBATCH --mail-type=BEGIN,END,FAIL                              # Mail events (NONE, BEGIN, END, FAIL, ALL)
+#SBATCH --mail-user=hb1115@york.ac.uk                           # Where to send mail  
+#SBATCH --ntasks=1                                              # Run a single task...
+#SBATCH --cpus-per-task=12                                      # ...with 8 cores
+#SBATCH --partition=nodes                                       # To prevent exceeding time limit 
+#SBATCH --mem=24gb                                              # Job memory request
+#SBATCH --time=24:00:00                                         # Time limit hrs:min:sec
+#SBATCH --output=wwpdb_data_curation_array_job_%j.log           # Standard output and error log
+#SBATCH --account=chem-structglyco-2019
+#SBATCH --array=1-1060
+
+module purge
+
+module load devel/CMake/3.16.4-GCCcore-9.3.0
+module load lang/Python/3.8.2-GCCcore-9.3.0
+
+cmake --version || "CMake is not found!. Install CMake then re-run this script " || exit 3
+gcc --version  || "GCC is not found!. Install GCC then re-run this script " || exit 3
+
+GCC="$(which gcc)"
+GPLUSPLUS="$(which g++)"
+echo "GCC: $GCC"
+echo "GCC: $GPLUSPLUS"
+GFORTRAN="$(which gfortran)"
+echo "GFORTRAN: $GFORTRAN"
+Threads="$(nproc --all)"
+
+export CC=$GCC
+export CXX=$GPLUSPLUS
+export FC=$GFORTRAN
+
+mainDir=/users/hb1115/scratch/PDB_anal
+cd $mainDir
+cd $mainDir/privateer
+privateerDir=$PWD
+
+echo Current working directory is `pwd`
+echo Running job on host:
+echo -e '\t'`hostname` at `date`
+echo $SLURM_CPUS_ON_NODE CPU cores available
+echo
+echo Privateer directory is located at $privateerDir
+
+echo My working directory is `pwd`
+echo Running array job index $SLURM_ARRAY_TASK_ID, on host:
+echo -e '\t'`hostname` at `date`
+echo
+
+source $privateerDir/pvtpython/bin/activate
+source $privateerDir/ccp4.envsetup-sh
+
+projectSigmaDir=$privateerDir/project_sigma
+
+# cd $projectSigmaDir
+# cd $projectSigmaDir/pdb_mirror
+
+# rsync -rlpt -v -z --delete --port=33444 \
+# rsync.rcsb.org::ftp_data/structures/divided/pdb/ ./pdb
+
+cd $projectSigmaDir
+# rm -rf $projectSigmaDir/data_collection/intermediate_output
+# rm -rf $projectSigmaDir/data_collection/final_output
+
+# pip3 install -r requirements.txt
+# pip install -r requirements.txt
+python3 --version
+which python3
+
+filename=$(awk NR==$SLURM_ARRAY_TASK_ID /users/hb1115/scratch/PDB_anal/viking_job_scripts/pdb_mirror.folders)
+python3 $projectSigmaDir/data_collection/prepare_glycans_for_clustering.py -folder $filename
+
+# cd $projectSigmaDir
+ls $projectSigmaDir/data_collection/intermediate_output
+# git status
+
+echo Job completed at `date`

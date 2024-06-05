@@ -1,0 +1,314 @@
+#!/usr/bin/env bash
+
+##    _                  
+##   (_)_ __ _   _ _ __  
+##   | | '__| | | | '_ \ 
+##   | | |  | |_| | | | |
+##  _/ |_|   \__,_|_| |_|
+## |__/                  
+
+## JURECA-RUN
+
+## Script to make it easy to submit jobs to the cluster queue
+## USAGE: jrun
+## USAGE: jrun -n  # No prompt after vipe
+## USAGE: jrun -c 'srun -n 48 commandname'
+## USAGE: jrun -c 'pvrun -np 48 volume_integral -o output_prefix ...'
+
+# Examples:
+# jrun -c 'srun -n12 mixd2pvtu mixd2pvtu.bed_c.in; cd bed_c; pvrun -np 12 radial_shell_integrate --nrad 5 --shelltype EQUIDISTANT -o GRM2D_FULL_U.DV' -n -ne 
+
+# set -euo pipefail
+
+mkdir -p .jobs
+
+SCRIPT_PATH=$(readlink -f -- "$BASH_SOURCE")
+
+CPU_CORE_RATIO=2        # If hyperthreading is on: 2, else 1
+COMMAND=""
+PROMPT=true
+EDIT=true
+INJOBFILE=""
+NPROC=48
+NTPN=48         # Num Tasks Per Node
+MODE=""
+TIME=24:00:00
+DEP_JOB=""
+TITLE="HDChroma"
+PARTITION="dc-cpu"
+
+# XNS_BIN="~/bin/xns-mpi-GCC12.3-PSMPI5.9.2-2023-12-26"
+XNS_BIN="~/bin/xns-mpi-2022-06-25"
+
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+    key="$1"
+
+    case $key in
+        -c|--command)
+            COMMAND="$2"
+            shift; shift ;;
+        -C|--command-all)
+            COMMAND="${@:2}"
+            shift $# ;;
+        -n|--no-prompt)
+            PROMPT=false
+            shift ;;
+        -ne|--no-edit)
+            EDIT=false
+            shift ;;
+        -l|--last)
+            INJOBFILE=$(ls -At .jobs/*.job | head -n1)
+            shift ;;
+        -ls|--list)
+            INJOBFILE=$(ls -At .jobs/*.job | fuzscope)
+            shift ;;
+        -s|--show)
+            less $(ls -At .jobs/* | fuzscope)
+            exit ;;
+        -t|--tail)
+            tail -F $(ls -At .jobs/* | fuzscope)
+            exit ;;
+        -tr|--tail-running)
+            job_ids=$(find .jobs -iname '*.job' -printf "%P" | sed 's/.job/|/g' )
+            job_ids=$(squeue -u rao2 -h | grep -P ${job_ids%%|} | awk '{print $1}' | sed 's/^/.jobs\//;s/$/.out/')
+            tail -F $job_ids
+            exit ;;
+        -tre|--tail-running-err)
+            job_ids=$(find .jobs -iname '*.job' -printf "%P" | sed 's/.job/|/g' )
+            job_ids=$(squeue -u rao2 -h | grep -P ${job_ids%%|} | awk '{print $1}' | sed 's/^/.jobs\//;s/$/.err/')
+            tail -F $job_ids
+            exit ;;
+        -r|--running)
+            job_ids=$(find .jobs -iname '*.job' -printf "%P" | sed 's/.job/|/g' )
+            squeue -u rao2 -h | grep -P ${job_ids%%|}
+            exit ;;
+        -iq|--is-queued)
+            [[ -n "$2" ]] || exit -1 
+            squeue -u rao2 -h | grep "$2"
+            [[ $? == 0 ]] && exit || exit -1
+            ;;
+        -a|--account)
+            tmp=$(ls -At .jobs/*.job | fuzscope)
+            jobid=$(basename "${tmp%%.job}")
+            sacct -j "$jobid" -o NTasks,AllocCPUS,Elapsed,MaxRSS --units=G
+            exit ;;
+        -q|--quota)
+            tmp=$(ls -At .jobs/*.job | fuzscope)
+            jobid=$(basename "${tmp%%.job}")
+            jobcputime=$(sacct -j "$jobid" -n -o CPUTimeRAW | head -n 1)
+            jobcputime=$(( jobcputime / CPU_CORE_RATIO / 3600 ))
+            monthly=$(/usr/libexec/jutil-exe user cpuquota -u rao2 | grep coreh-quota-monthly | cut -d '=' -f2)
+            monthly=${monthly%.*}
+            monthly_percent=$(( (jobcputime * 100) / monthly ))
+            echo "JobID: $jobid"
+            echo "Core-h: $jobcputime"
+            echo "Monthly quota fraction: $monthly_percent%"
+            exit ;;
+        -qa|--quota-all)
+            sum=0
+            while IFS= read -r jobfile; do
+                jobid=$(basename "${jobfile%%.job}")
+                # sacct -j "$jobid" -o NTasks,AllocCPUS,Elapsed,CPUTime,CPUTimeRAW,MaxRSS,MaxRSSNode,MaxRSSTask,NCPUS
+                jobcputime=$(sacct -j "$jobid" -n -o CPUTimeRAW | head -n 1)
+                sum=$(( sum + jobcputime ))
+            done <<< $(ls -At .jobs/*.job)
+            sum=$(( sum  / CPU_CORE_RATIO / 3600 ))
+            monthly=$(/usr/libexec/jutil-exe user cpuquota -u rao2 | grep coreh-quota-monthly | cut -d '=' -f2)
+            monthly=${monthly%.*}
+            monthly_percent=$(( (sum * 100) / monthly ))
+            echo "Core-h: $sum"
+            echo "Monthly quota fraction: $monthly_percent%"
+            exit ;;
+        -lo|--show-last-out)
+            less $(ls -At .jobs/*.out | head -n1)
+            exit ;;
+        -lj|--show-last-job)
+            less $(ls -At .jobs/*.job | head -n1)
+            exit ;;
+        -le|--show-last-err)
+            less $(ls -At .jobs/*.err | head -n1)
+            exit ;;
+        -la|--last-account)
+            tmp=$(ls -At .jobs/*.job | head -n1)
+            jobid=$(basename "${tmp%%.job}")
+            sacct -j "$jobid" -o NTasks,AllocCPUS,Elapsed 
+            exit ;;
+        -kl|--kill-last)
+            tmp=$(ls -At .jobs/*.job | head -n1)
+            [ -z "$tmp" ] && exit
+            jobid=$(basename "${tmp%%.job}")
+            ans="y"
+            read -p $'> \e[31mkill '"$jobid"$'?\e[0m: ' -e -i "$ans" ans
+            [ "$ans" != "y" ] && exit
+            scancel "$jobid"
+            exit ;;
+        -ka|--kill-all)
+            job_ids=$(squeue -u rao2 -h | awk '{print $1}')
+            echo "$job_ids" | xargs scancel
+            exit ;;
+        -kr|--kill-running)
+            job_ids=$(find .jobs -iname '*.job' -printf "%P" | sed 's/.job/|/g' | sed 's/|$//' )
+            job_ids=$(squeue -u rao2 -h | grep -P $job_ids 2>/dev/null | awk '{print $1}')
+            echo "$job_ids" | xargs scancel
+            exit ;;
+        -np|--nproc)
+            NPROC=$2
+            shift; shift ;;
+        -nt|--ntpn)
+            NTPN=$2
+            shift; shift ;;
+        -T|--time)
+            TIME=$2
+            shift; shift ;;
+        -d|--dependency)
+            DEP_JOB=$2
+            shift; shift ;;
+        -x|--xns)
+            MODE="XNS"
+            shift ;;
+        -X|--xns-bin)
+            MODE="XNS"
+            XNS_BIN="$2"
+            shift; shift ;;
+        -v|--vis)
+            MODE="VIS"
+            shift ;;
+        -L22|--load-2022)
+            MODE="2022"
+            shift ;;
+        -L24|--load-2024)
+            MODE="2024"
+            shift ;;
+        --conda-dev)
+            MODE="CONDA_DEV"
+            shift ;;
+        --gmsh)
+            MODE="GMSH"
+            shift ;;
+        --title)
+            TITLE="$2"
+            shift; shift ;;
+        -p|--partition)
+            PARTITION="$2"
+            shift; shift ;;
+        -h|--help)
+            echo "jrun: runscript for JURECA-DC"
+            echo "The following args are processed:" 
+            grep -Po '\s*-\w+\|[^)]*' "$SCRIPT_PATH"
+            exit ;;
+        *)    # unknown option
+            POSITIONAL+=("$1") # save it in an array for later
+            shift ;;
+    esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+
+read -r -d '' HEADER << EOFMARKER
+#!/usr/bin/env bash
+
+#SBATCH -J $TITLE
+#SBATCH -n $NPROC
+#SBATCH --ntasks-per-node=$NTPN
+#SBATCH --time=$TIME
+#SBATCH --partition=$PARTITION
+
+#SBATCH -A jibg12
+#SBATCH -o .jobs/%j.out 
+#SBATCH -e .jobs/%j.err 
+##SBATCH --mail-type=ALL
+##SBATCH --mail-user=jayghosh.rao@rwth-aachen.de
+
+EOFMARKER
+
+if [[ -n "$DEP_JOB" ]] ; then
+read -r -d '' DEPENDS << EOFMARKER
+#SBATCH -d afterany:$DEP_JOB
+
+EOFMARKER
+fi
+
+read -r -d '' ENVIRONMENT << EOFMARKER
+source /p/software/jurecadc/lmod/8.4.1/init/zsh
+export MODULEPATH=/p/project/cjibg12/modulefiles:/p/software/jurecadc/supercomputer_modules:/p/software/jurecadc/productionstages
+EOFMARKER
+
+if [[ $MODE == "VIS" ]]; then 
+read -r -d '' CMDS << EOFMARKER
+# module load Stages/2022
+# module load Stages/2022 GCC/11.2.0 ParaStationMPI/5.5.0-1 ParMETIS/4.0.3-double Boost/1.78.0 VTK/9.1.0 flex/2.6.4
+module load paraview/5.10.1 paravision
+source ~/cjibg12/miniconda3/bin/activate paravision
+
+EOFMARKER
+fi
+
+if [[ $MODE == "XNS" ]]; then 
+read -r -d '' CMDS << EOFMARKER
+module load Stages/2022 GCC/11.2.0 ParaStationMPI/5.5.0-1 ParMETIS/4.0.3-double Boost/1.78.0 VTK/9.1.0 flex/2.6.4
+## module load Stages/2024 GCC/12.3.0 ParaStationMPI/5.9.2-1 Boost/1.82.0 flex/2.6.4
+srun -n $NPROC --ntasks-per-node=$NTPN $XNS_BIN < xns.in
+EOFMARKER
+fi
+
+if [[ $MODE == "2022" ]]; then 
+read -r -d '' CMDS << EOFMARKER
+module load Stages/2022 GCC/11.2.0 ParaStationMPI/5.5.0-1 ParMETIS/4.0.3-double Boost/1.78.0 VTK/9.1.0 flex/2.6.4
+EOFMARKER
+elif [[ $MODE == "2024" ]]; then 
+read -r -d '' CMDS << EOFMARKER
+module load Stages/2024 GCC/12.3.0 ParaStationMPI/5.9.2-1 Boost/1.82.0 flex/2.6.4
+EOFMARKER
+fi
+
+if [[ $MODE == "CONDA_DEV" ]]; then
+read -r -d '' CMDS << EOFMARKER
+source ~/cjibg12/miniconda3/bin/activate dev
+EOFMARKER
+fi
+
+if [[ "$MODE" == "GMSH" ]]; then
+read -r -d '' CMDS << EOFMARKER
+module load Stages/2022 GCC/11.2.0 ParaStationMPI/5.5.0-1 ParMETIS/4.0.3-double Boost/1.78.0 VTK/9.1.0 flex/2.6.4
+module load gmsh/4.11.0-2ac03e-copymesh.lua
+source ~/cjibg12/miniconda3/bin/activate dev 
+EOFMARKER
+fi
+
+JOBSCRIPT=$(echo -e "$HEADER\n$DEPENDS\n\n$ENVIRONMENT\n$CMDS")
+
+if [ -n "$1" ]; then
+    INJOBFILE="$1"
+fi
+
+if [ -n "$INJOBFILE" ]; then
+    FINAL=$(cat "$INJOBFILE")
+elif [ -n "$COMMAND" ]; then
+    FINAL=$(echo -e "$JOBSCRIPT\n\n$COMMAND")
+else
+    FINAL=$(echo "$JOBSCRIPT")
+fi
+
+if [[ "$EDIT" == true ]]; then
+    FINAL=$(echo -e "$FINAL" | vipe)
+fi
+
+[ -z "$FINAL" ] && exit
+
+echo "$FINAL"
+
+if [[ "$PROMPT" == true ]]; then
+    ANSWER="y"
+    read -p $'> \e[31msubmit?\e[0m: ' -e -i "$ANSWER" ANSWER
+    [ "$ANSWER" != "y" ] && exit
+fi
+
+OUT=$(sbatch <(echo "$FINAL"))
+echo "$OUT"
+
+JOBID=$(echo "$OUT" | awk '{print $NF}')
+echo "Submitted $JOBID"
+
+echo "$FINAL" > ".jobs/$JOBID.job"

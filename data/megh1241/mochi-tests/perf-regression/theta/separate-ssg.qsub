@@ -1,0 +1,35 @@
+#!/bin/bash
+#COBALT -n 2
+#COBALT -t 5
+#COBALT --mode script
+#COBALT -A CSC250STDM12
+#COBALT -q debug-cache-quad
+
+export HOME=$SANDBOX
+. $SANDBOX/spack/share/spack/setup-env.sh
+spack env activate mochi-regression
+spack find -vN
+
+export MPICH_GNI_NDREG_ENTRIES=1024
+
+SSG_PDOMAIN="sds-nightly"
+apmgr pdomain -c -u $SSG_PDOMAIN
+
+SSG_STATEFILE=ssg-state.cfg
+rm -f $SSG_STATEFILE
+
+aprun -cc none -p ${SSG_PDOMAIN} -n 1 -N 1 ./ssg-test-separate-group-create ofi+gni:// ${SSG_STATEFILE} &
+
+sleep_time=1;
+while [ ! -e $SSG_STATEFILE ] ; do
+	sleep $sleep_time;
+	sleep_time=$(( sleep_time * 2))
+done
+
+xxd $SSG_STATEFILE
+
+aprun -cc none -p ${SSG_PDOMAIN} -n 1 -N 1 ./ssg-test-separate-group-attach ofi+gni:// ${SSG_STATEFILE}
+# give creator aprun time to clean up the protection domain
+sleep 5
+apmgr pdomain -r ${SSG_PDOMAIN}
+

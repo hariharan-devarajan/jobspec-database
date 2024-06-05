@@ -1,0 +1,86 @@
+#!/bin/bash
+################################
+# Definition de la variable HOST
+################################
+export HOST=`hostname | awk -F. '{print $1}'`
+HOST_OLD=$HOST
+[ "${HOST#lumi}" != $HOST ] && HOST=cray-amd
+[ "${HOST#CINES01}" != $HOST ] && HOST=cray-amd
+[ "${HOST#CINES0[2-3]}" != $HOST ] && HOST=cines-nvidia
+[ "${HOST#lumi0[1-2]}"   != $HOST ] && HOST=cray-amd
+[ "${HOST#CINES01}"      != $HOST ] && HOST=cray-amd
+[ "${HOST#CINES0[2-3]}"  != $HOST ] && HOST=cines-nvidia
+[ "${HOST#st[0-9][0-9]}" != $HOST ] && HOST=sagittarius
+if [ "${HOST#irene}"     != $HOST ]
+then
+   HOST=irene-ccrt
+   [ "`grep AMD /proc/cpuinfo`" ] && HOST=irene-amd-ccrt
+   [ "`uname -m`" = aarch64 ]     && HOST=irene-arm-ccrt
+fi
+[ "${HOST#ceres3}"       != $HOST ] && HOST=ceres3
+[ "${HOST#cobalt}"       != $HOST ] && HOST=cobalt
+[ "${HOST#topaze}"       != $HOST ] && HOST=topaze
+[ "${HOST#wn}"           != $HOST ] && HOST=csp-cssi
+[ "${HOST#frontal-csp}"  != $HOST ] && HOST=csp-cssi
+[ "${HOST#cristal}"      != $HOST ] && HOST=cristal
+[ "${HOST#devel}"        != $HOST ] && HOST=plafrim
+[ "${HOST#jean-zay}"     != $HOST ] && HOST=jean-zay
+[ "${HOST#idrsrv}"       != $HOST ] && HOST=jean-zay
+[ "${HOST#gutta}"        != $HOST ] && HOST=aar
+[ "${HOST#grenx}"        != $HOST ] && HOST=aar
+[ "${HOST#aar}"          != $HOST ] && HOST=aar
+[ "${HOST#summer}"       != $HOST ] && HOST=summer
+if [ "${HOST#mezel}"        != $HOST ]
+then
+   HOST=mezel
+   # Seen on mezel's nfs4 home, huge size of conda files (instead of 1.8Go, disque usage is > 500Go on mezel's home).
+   if [ "${TRUST_ROOT#${HOME}}" != "$TRUST_ROOT" ]
+   then
+      echo "Fatal error: You are attempting to install TRUST on /home (nfs4) which is not not allowed on mezel cluster."
+      echo "You should move $TRUST_ROOT to ${TRUST_ROOT/home/scratch} before reinstalling TRUST"
+      exit
+   fi
+fi
+if [ "${HOST#n[0-9][0-9][0-9][0-9]}" != $HOST ] && [ "`hostname -A 2>/dev/null | grep cm.cluster`" != "" ]
+then
+   HOST=orcus-intel && [ "`grep AMD /proc/cpuinfo`" ] && HOST=orcus-amd
+fi
+if [ "${HOST#login}"     != $HOST ] || [ "`hostname -A 2>/dev/null | grep adastra`" != "" ]
+then
+   if [ "`hostname -A 2>/dev/null | grep orcuslogin`" != "" ]
+   then
+      HOST=orcus-intel && [ "`grep AMD /proc/cpuinfo`" ] && HOST=orcus-amd
+   elif [ "`hostname -A 2>/dev/null | grep adastra`" != "" ]
+   then
+      HOST=adastra
+   else
+      HOST=occigen
+   fi
+elif [ -d /home/catA ]  # Detection CEA
+then
+   # Detection des modules du DM2S pour passage C++ 14 + Compilateurs NVidia:
+   [ "`grep '^NAME' /etc/os-release | grep -i 'centos\|ubuntu' 2>/dev/null`" != "" ] && HOST=cea-dm2s
+fi
+
+# New variable HOST for several build on the same HOST:
+if [ "$WORKBASE" = "" ]
+then
+   export HOST_BUILD=""
+else
+   HOST_BUILD=`echo ${TRUST_ROOT%/TRUST} | awk -F$WORKBASE '{print $2}'`
+   export HOST_BUILD=`echo ${HOST_BUILD%/TRUST_moved}`
+fi
+[ "$HOST_BUILD" = "" ] && HOST_BUILD=$HOST
+##########################################
+# Updating the TRUST_WITHOUT_HOST variable
+# Test the existence of the HOST_*.sh file
+########################################## 
+if [ "$TRUST_WITHOUT_HOST" = 0 ]
+then
+   if [ "$TRUST_ROOT" != "" ]
+   then
+      [ ! -f $TRUST_ROOT/env/HOST_$HOST_BUILD.sh ] && export TRUST_WITHOUT_HOST=1
+   else
+      [ ! -f HOST_$HOST_BUILD.sh ] && export TRUST_WITHOUT_HOST=1
+   fi
+fi

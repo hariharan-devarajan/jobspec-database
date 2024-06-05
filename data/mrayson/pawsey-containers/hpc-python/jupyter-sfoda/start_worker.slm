@@ -1,0 +1,64 @@
+#!/bin/bash -l
+# Allocate slurm resources, edit as necessary
+#SBATCH --account=pawsey0106
+#SBATCH --partition=work
+#SBATCH --ntasks=8
+#SBATCH --cpus-per-task=4
+#SBATCH --time=01:00:00
+#SBATCH --job-name=dask-worker
+#SBATCH --output=dask-worker-%j.out
+#SBATCH --export=NONE
+#####
+# Run a dask worker in a container
+#
+# Usage:
+
+scheduler_file=$1
+notebook_dir=$2
+ 
+cd ${notebook_dir}
+
+#Set these to have singularity bind data locations
+export SINGULARITY_BINDPATH=/group:/group,/scratch:/scratch,/run:/run,$HOME:$HOME 
+
+#This is needed to setup conda in the container correctly
+export SINGULARITYENV_PREPEND_PATH=/srv/conda/envs/notebook/bin:/srv/conda/condabin:/srv/conda/bin
+export SINGULARITYENV_XDG_DATA_HOME=$MYSCRATCH/.local
+
+# OpenMP settings
+#export SINGULARITYENV_OMP_NUM_THREADS=8  #To define the number of threads
+#export SINGULARITYENV_OMP_PROC_BIND=close  #To bind (fix) threads (allocating them as close as possible)
+#export SINGULARITYENV_OMP_PLACES=cores     #To bind threads to cores
+
+
+# End user-specfified environment variables
+###
+
+# Set the image and tag we want to use
+dockerversion=20230825
+image="docker://mrayson/jupyter_sfoda:${dockerversion}"
+
+ 
+# Get the image filename
+imagename=${image##*/}
+imagename=${imagename/:/_}.sif
+ 
+# Load Singularity
+singularityversion=3.11.4-slurm
+module load singularity/${singularityversion}
+ 
+# Pull our image in a folder
+singularity pull $imagename $image
+
+# calculate task memory limit
+mempcpu=$SLURM_MEM_PER_CPU
+memlim=$(echo $SLURM_CPUS_PER_TASK*$mempcpu*0.98 | bc)
+
+echo Memory limit is $memlim
+
+echo starting $SLURM_NTASKS workers with $SLURM_CPUS_PER_TASK CPUs each
+
+srun --export=ALL -n $SLURM_NTASKS -c $SLURM_CPUS_PER_TASK \
+    singularity exec $imagename \
+    dask-worker --scheduler-file $scheduler_file --nthreads $SLURM_CPUS_PER_TASK --memory-limit ${memlim}M 
+

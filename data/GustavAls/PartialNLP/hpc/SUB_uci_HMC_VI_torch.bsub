@@ -1,0 +1,99 @@
+#!/bin/sh
+### Job array
+### –- specify queue --
+### CHANGE HERE FOR GPU/CPU
+##BSUB -q hpc
+### -- set the job Name --
+#BSUB -J hmc_vi_energy_rand[1-15]
+### -- ask for number of cores (default: 1) --
+#BSUB -n 4
+#BSUB -R "span[hosts=1]"
+### -- Select the resources: 1 gpu in exclusive process mode --
+### CHANGE HERE FOR GPU/CPU
+##BSUB -gpu "num=1:mode=exclusive_process"
+### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
+#BSUB -W 3:00
+# request xGB of system-memory
+#BSUB -R "rusage[mem=3GB]"
+### -- set the email address --
+# please uncomment the following line and put in your e-mail address,
+# if you want to receive e-mail notifications on a non-default address
+###BSUB -u your_email_address
+### -- send notification at start --
+##BSUB -B
+### -- send notification at completion--
+##BSUB -N
+### -- Specify the output and error file. %J is the job-id --
+### -- -o and -e mean append, -oo and -eo mean overwrite --
+#BSUB -o out/gpu_%J.out
+#BSUB -e out/gpu_%J.err
+# -- end of LSF options --
+
+# Activate the python environment
+module load python3/3.9.11
+source ~/PartialNLP/scratch/s184400/partial_venv/bin/activate
+# Set python path
+export PYTHONPATH=$PYTHONPATH:~/PartialNLP/
+export PYTHONPATH=$PYTHONPATH:~/
+
+# Load the cuda module
+module load cuda/11.6
+/appl/cuda/11.6.0/samples/bin/x86_64/linux/release/deviceQuery
+
+echo "Running script..."
+# Send sample job to GPU
+
+##### ADD INFO HERE ####
+model_name="energy"
+
+# Get the values for this job array task using LSB_JOBINDEX
+# Will terminate if all percentiles is already complete
+runs=(0 1 2 3 4 5 6 7 8 9 10 11 12 13 14)
+
+# Get the values for this job array task using LSB_JOBINDEX
+run="${runs[$LSB_JOBINDEX - 1]}"
+
+#Maybe get this to work if we need even more runs
+#run = "${LSB_JOBINDEX - 1}"
+
+# Create some folders
+dir_outpath="results/UCI_HMC_VI_torch_test_rand/${model_name}_models"
+dir_datapath="results/UCI_HMC_VI_torch_test_rand/${model_name}_data"
+dir_map_path="results/MAP_models/${model_name}/run_${run}.pt"
+dir_dataset_path="results/UCI_Laplace_SWAG/${model_name}_data/data_laplace_run_${run}.pkl"
+
+# Make the directories if they don't exist
+mkdir -p $dir_outpath
+mkdir -p $dir_datapath
+
+
+#--l_var 0.00001
+
+# Run the training
+python3 HMC/uci_hmc.py \
+    --output_path $dir_outpath \
+    --data_path $dir_datapath \
+    --dataset $model_name \
+    --map_path $dir_map_path \
+    --dataset_path $dir_dataset_path \
+    --run $run \
+    --num_epochs 30000 \
+    --scale_prior True \
+    --prior_variance 0.1 \
+    --likelihood_scale 8.0 \
+    --node_based_add False \
+    --node_based True \
+    --vi False \
+    --hmc False \
+    --inf_norm_mask False \
+    --random_mask True \
+    --only_full False \
+    
+
+if [ $? -eq 0 ]; then
+    echo "Success"
+    exit 0
+else
+    echo "Error"
+    exit 1
+fi

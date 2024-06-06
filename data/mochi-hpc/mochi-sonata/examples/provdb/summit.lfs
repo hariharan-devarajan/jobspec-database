@@ -1,0 +1,85 @@
+#!/bin/bash
+#BSUB -P CSC332
+#BSUB -J sonata
+#BSUB -o sonata.o%J
+#BSUB -W 30
+#BSUB -nnodes 31
+#BSUB -alloc_flags NVME
+
+PROTOCOL_SERVER="verbs://mlx5_0"
+#PROTOCOL_SERVER="ofi+tcp;ofi_rxm://ib0:5000"
+
+PROTOCOL_CLIENT="verbs://mlx5_0"
+#PROTOCOL_CLIENT="ofi+tcp;ofi_rxm://ib0"
+
+JOB_INFO=`bjobs -W -noheader $LSB_JOBID`
+JOB_INFO_ARRAY=($JOB_INFO)
+HOSTNAME_LIST=($(echo ${JOB_INFO_ARRAY[5]} | tr ":" "\n" | sort -u | tr '\n' ' '))
+NUM_NODES=$(( ${#HOSTNAME_LIST[@]} - 1 ))
+
+NUM_SERVER_NODES=${1:-1}
+NUM_SERVERS_PER_NODE=${2:-1}
+DEFAULT_NUM_DBS_PER_SERVER=$(( 40/$NUM_SERVERS_PER_NODE ))
+NUM_DBS_PER_SERVER=${3:-${DEFAULT_NUM_DBS_PER_SERVER}}
+NUM_CLIENT_NODES=$(( $NUM_NODES - $NUM_SERVER_NODES ))
+NUM_CLIENTS_PER_NODE=${4:-42}
+
+# disable MR cache in libfabric; still problematic as of libfabric 1.10.1
+export FI_MR_CACHE_MAX_COUNT=0
+# use shared recv context in RXM; should improve scalability
+export FI_OFI_RXM_USE_SRX=1
+export FI_UNIVERSE_SIZE=1600
+
+# required to have correct versions of glibc
+module swap xl gcc/9.1.0
+
+# activate spack
+. $HOME/spack/share/spack/setup-env.sh
+spack env activate sonata-env
+
+EXP_DIR=exp-$LSB_JOBID
+mkdir $EXP_DIR
+
+cp "../examples/provdb/sonata_config.json" $EXP_DIR
+cp "../examples/provdb/example_record.json" $EXP_DIR
+cp "../examples/provdb/client_margo.json" $EXP_DIR
+
+python ../examples/provdb/make-server-config.py \
+         ../examples/provdb/server_margo.json $NUM_DBS_PER_SERVER > $EXP_DIR/server_margo.json
+
+python ../examples/provdb/make-server-erf.py \
+         $NUM_SERVER_NODES $NUM_SERVERS_PER_NODE > $EXP_DIR/servers.erf
+
+python ../examples/provdb/make-client-erf.py \
+         $NUM_SERVER_NODES $NUM_CLIENT_NODES $NUM_CLIENTS_PER_NODE > $EXP_DIR/clients.erf
+
+all_providers=""
+
+for (( c=0; c<${NUM_DBS_PER_SERVER}; c++ ))
+do
+    provider="${c}:pool_s${c}"
+    all_providers="$all_providers -p $provider"
+done
+
+# run server
+jsrun --erf_input $EXP_DIR/servers.erf ./examples/provdb/provdb_server \
+       -a ${PROTOCOL_SERVER} \
+       -o "${EXP_DIR}/providers.txt" \
+       -s "${EXP_DIR}/sonata_config.json" \
+       -c "${EXP_DIR}/server_margo.json" \
+       ${all_providers} \
+       -v debug 1> $EXP_DIR/server.out 2> $EXP_DIR/server.err &
+
+# wait until providers.txt file appears
+while [ ! -f $EXP_DIR/providers.txt ]; do sleep 10; done
+# give servers 10 seconds to write all the addresses and be ready
+sleep 10
+
+# run client
+jsrun --erf_input $EXP_DIR/clients.erf ./examples/provdb/provdb_client \
+       -a ${PROTOCOL_CLIENT} \
+       -r "${EXP_DIR}/example_record.json" \
+       -p "${EXP_DIR}/providers.txt" \
+       -c "${EXP_DIR}/client_margo.json" \
+       -w 1000 -i 1000 -f 5 \
+       -v info 1> $EXP_DIR/client.out 2> $EXP_DIR/client.err

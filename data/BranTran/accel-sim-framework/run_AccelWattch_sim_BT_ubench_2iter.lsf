@@ -1,0 +1,44 @@
+#!/bin/bash
+#BSUB -P gen150
+#BSUB -W 2:00
+#BSUB -J AccelWattch_Sim_Ubench_2Iter
+#BSUB -nnodes 18
+#BSUB -N bqtran2@wisc.edu
+#Run this script from the accelwattch_hw_profiler
+
+
+#Needed modules
+module load gcc/7.5.0 #7.5.0 for summit, 6.5.0 if Andes 
+module load cuda/11.0.2
+module load makedepend
+module load python
+module load nsight-compute/2023.2.2
+module load nsight-systems
+module load cmake
+
+#Setting up environment variables
+export CUDA_INSTALL_PATH=$(dirname "$(dirname `which nvcc`)")
+export PATH=$CUDA_INSTALL_PATH/bin:$PATH
+
+#Move to the correct directory
+cd $MEMBERWORK/gen150/accelwattch-artifact-appendix
+
+#Setup environment variables with source
+source ./accel-sim-framework/gpu-simulator/setup_environment.sh
+echo $ACCELSIM_ROOT
+
+config_file='config_feb2024_all_2iter.cfg'
+while IFS= read -r benchmark; do
+    echo "Launching Accelwattch simulator for $benchmark"
+    
+    # Replace spaces with underscores in the benchmark name
+    replace_name=$(echo "$benchmark" | tr ' ' '_')
+jsrun -i -n1 -c1 \
+    --stdio_stdout ${replace_name}.out --stdio_stderr ${replace_name}.err \
+    $ACCELSIM_ROOT/../util/job_launching/run_simulations.py \
+    -B ${replace_name} -a -C Tesla_V100-Accelwattch_SASS_SIM \
+    -T $ACCELSIM_ROOT/../hw_run/ubench_1iter/ -N ubench_2iter \
+    -l local -r $ACCELSIM_ROOT/../accelwattch_runs/ubench_2iter && \
+    rm ${replace_name}.err ${replace_name}.out;
+done < "$config_file"
+jswait all

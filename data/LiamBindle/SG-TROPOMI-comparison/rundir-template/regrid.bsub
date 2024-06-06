@@ -1,0 +1,19 @@
+#!/bin/bash
+#BSUB -q {{ job['queue'] }}
+#BSUB -n 16
+#BSUB -W 6:00
+#BSUB -R "rusage[mem=300000] span[hosts=1]"
+#BSUB -a 'docker(liambindle/mypyenv)'
+#BSUB -J "E2 regrid rst"
+#BSUB -g /$USER/E2
+#BSUB -o lsf-regrid-%J-output.txt
+
+source /opt/conda/bin/activate py36
+
+set -x                           # Print executed commands
+set -e                           # Exit immediately if a command fails
+
+# Execute simulation
+export PYTHONPATH=/scratch1/liam.bindle/sg-EPA-AQS/gcpy
+cd {{ paths['run_directory'] }}
+python -m gcpy.cs_regrid -i /scratch1/liam.bindle/GCHPctm-13.0.0-alpha.3-Standard-1yr/gcchem_internal_checkpoint.20160601_0000z.nc4 -o initial_restart_file.nc --sg_params_out {{ grid['stretch_factor'] }} {{ grid['target_lon'] }} {{ grid['target_lat'] }} --cs_res_out {{ grid['cs_res'] }} --stacked_in --stacked_out

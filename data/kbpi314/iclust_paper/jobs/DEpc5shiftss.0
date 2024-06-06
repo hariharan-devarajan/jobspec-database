@@ -1,0 +1,15 @@
+#!/bin/bash
+#BSUB -q gpu
+#BSUB -W 24:00
+#BSUB -J DEpc5shiftss.0
+#BSUB -P acc_clemej05a
+#BSUB -n 1
+#BSUB -R rusage[mem=4000]
+#BSUB -o %J.stdout
+#BSUB -eo %J.stderr
+#BSUB -L /bin/bash
+
+
+export PYTHONPATH=$PYTHONPATH:/hpc/users/buk02/tools/sandbox/lib/python3.7/site-packages/
+
+module load anaconda3 && source activate tfGPU && export http_proxy="http://nfs01.chimera.hpc.mssm.edu:3128/" && export https_proxy="https://nfs01.chimera.hpc.mssm.edu:3128/" && export ftp_proxy="http://nfs01.chimera.hpc.mssm.edu:3128/" && export rsync_proxy="http://nfs01.hpc.chimera.mssm.edu:3128/" && export no_proxy="localhost,127.0.0.1" && rm -rf /sc/arion/projects/clemej05a/kevin/iclust/outputs/jobs62 && mkdir /sc/arion/projects/clemej05a/kevin/iclust/outputs/jobs62 && for k in cc jb skew kurtosis rmse mine; do mkdir /sc/arion/projects/clemej05a/kevin/iclust/outputs/jobs62/de_${k}/; done && for i in {0..19}; do for k in cc jb skew kurtosis rmse mine; do python /hpc/users/buk02/Repositories/iclust/scripts/plot_correlations.py -i /sc/arion/projects/clemej05a/kevin/iclust/inputs/de_df.txt -o /sc/arion/projects/clemej05a/kevin/iclust/outputs/jobs62/de_${k}/ --labeled -l group -s ${i} -n 10 -sv 0.1,0.25,0.5,0.75,1.0,2.0,3.0 -dl de --points --axis_off --no_fixaxis -m $k && for j in 0.1 0.25 0.5 0.75 1.0 2.0 3.0; do mkdir /sc/arion/projects/clemej05a/kevin/iclust/outputs/jobs62/de_${k}/de_${i}_${j}_results && python /hpc/users/buk02/Repositories/iclust/scripts/image_cluster.py -i /sc/arion/projects/clemej05a/kevin/iclust/outputs/jobs62/de_${k}/de_${i}_${j}/ -o /sc/arion/projects/clemej05a/kevin/iclust/outputs/jobs62/de_${k}/de_${i}_${j}_results/ -s ss -l True -p True -nc 5 -min 2 -max 20 -m $k; done; done; done

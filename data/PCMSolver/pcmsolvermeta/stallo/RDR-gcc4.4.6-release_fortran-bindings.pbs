@@ -1,0 +1,47 @@
+#!/bin/bash
+#PBS -lnodes=1:ppn=16:localwork
+#PBS -lwalltime=4:00:00
+#PBS -A nn4654k
+
+module purge
+module rm intel
+module load gcc/4.4.6
+module load cmake/3.1.0
+module load python/2.7.3
+module load gold
+
+which gfortran
+which gcc
+which g++
+gfortran --version
+gcc --version
+g++ --version
+
+export build_name=RDR-CentOS-6.6-gcc4.4.6-release
+export site_name=stallo.uit.no
+PCMSolver_TMPDIR=/local/work/roberto/pcmscratch-${build_name}
+export PCMSolver_TMPDIR
+export NPROCS=`lscpu -p | egrep -v '^#' | wc -l`
+export CTEST_MAKE_NUM_PROCS=$NPROCS
+
+export PYTHON=`which python`
+
+TMP_DIR=/global/work/roberto/tmprunpcmsolver/${build_name}
+mkdir -p $TMP_DIR
+
+git clone git@gitlab.com:PCMSolver/pcmsolver.git $TMP_DIR
+
+cd $TMP_DIR
+
+python setup.py --fc=gfortran --cc=gcc --cxx=g++ --type=release --python=$PYTHON --cmake-options='-DBUILDNAME=${build_name} -DSITE=${site_name} -DFORCE_CUSTOM_BOOST=ON -DENABLE_FORTRAN_API=ON'
+
+cd $TMP_DIR/build
+
+
+ctest -D Nightly -j$NPROCS
+
+cd
+rm -rf $PCMSolver_TMPDIR $TMP_DIR
+
+exit 0
+

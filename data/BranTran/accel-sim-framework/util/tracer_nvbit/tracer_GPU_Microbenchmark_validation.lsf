@@ -1,0 +1,41 @@
+#!/bin/bash
+#BSUB -P gen150
+#BSUB -W 2:00
+#BSUB -J AccelWattch_Hardware_Performance_Counters
+#BSUB -nnodes 1
+#BSUB -N tranbq@ornl.gov
+#Run this script from the accelwattch_hw_profiler
+
+#Get host/GPU information
+echo "####START INFO####"
+echo "Host information: Node"
+echo $LSB_MCPU_HOST
+echo $LSB_HOSTS | tr ' ' '\n' | sort | grep -v 'batch' | uniq
+##NOTE: These do not get the GPU_IDs for the nodes that are running
+#echo "GPU Information: Device_ID GPU_ID"
+#nvidia-smi -L | awk '{print NR-1, $NF}' | tr -d '[)]'
+echo "####END   INFO####"
+
+#Needed modules
+module load gcc/7.5.0 #7.5.0 for summit, 6.5.0 if Andes 
+module load cuda/11.0.2
+module load makedepend
+module load python
+module load nsight-compute
+module load nsight-systems
+module load cmake
+
+#Setting up environment variables
+export CUDA_INSTALL_PATH=$(dirname "$(dirname `which nvcc`)")
+export PATH=$CUDA_INSTALL_PATH/bin:$PATH
+
+#Move to the correct directory
+cd $MEMBERWORK/gen150/accelwattch-artifact-appendix
+pwd
+
+#Setup environment variables with source
+source ./accel-sim-framework/gpu-simulator/setup_environment.sh
+echo $ACCELSIM_ROOT
+
+#export CUDA_VISIBLE_DEVICES=<GPU_DEVID>
+jsrun -n1 -c1 -g1 nvidia-smi -L | awk '{print NR-1, $NF}' | tr -d '[)]'; $ACCELSIM_ROOT/../util/tracer_nvbit/run_hw_trace.py -B GPU_Microbenchmark_validation -D 0

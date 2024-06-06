@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
 
 
+import argparse
+import fnmatch
+import hashlib
 import io
+import os
 import re
 import string
-import tqdm
+import sys
 
 import numpy as np
-
 import rse.utils.file as utils
 import tensorflow as tf
+import tqdm
 from tensorflow.keras import layers
-
-import argparse
-import os
-import sys
-import fnmatch
-
-import hashlib
 
 # Not sure if we need nltk, I've used it
 # in the past for processing but seems like we don't.

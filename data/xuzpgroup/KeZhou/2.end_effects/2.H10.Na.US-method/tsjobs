@@ -1,0 +1,19 @@
+#!/bin/sh
+#BSUB -J sup-H10
+#BSUB -q priority
+#BSUB -n 12
+#BSUB -o %J.output -e %J.err
+#BSUB -W 240:00
+#BSUB -a intelmpi
+#BSUB -R "span[ptile=12]"
+
+
+############################################################################
+# Definition of variables
+############################################################################
+EXE="/home/xuzp/bin/lmp_zhou.plumed"
+# EXE="lmp_plumed"
+totalCores=12
+
+mpirun.lsf -np ${totalCores} ${EXE} < eq.GO.ions.in >& log
+

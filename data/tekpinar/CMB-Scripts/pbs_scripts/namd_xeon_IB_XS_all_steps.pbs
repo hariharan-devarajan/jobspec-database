@@ -1,0 +1,142 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -l walltime=72:00:00
+#PBS -l nodes=8:ppn=8
+#PBS -m e
+#PBS -j oe
+#PBS -q wenjun
+#PBS -o 1583_waxs_pbs.out
+#PBS -N 1583_waxs
+#PBS -M tekpinar@buffalo.edu
+#
+# Change to job submission directory
+#
+
+export CONV_RSH=ssh
+
+cd $PBS_O_WORKDIR
+#
+# load namd via module
+
+. $MODULESHOME/init/bash
+module load namd/2.8-IBVERBS
+#module load namd/2.8-IB
+
+#
+# Set number of processors to number requested from PBS
+#
+NP=`cat $PBS_NODEFILE | wc -l`
+echo "NAMDHOME = "$NAMDHOME
+#
+# construct namd nodes file from $PBS_NODEFILE
+#
+export NODELIST=tmp.$$
+echo "group main" > $NODELIST
+NODES=`cat $PBS_NODEFILE`
+for node in $NODES ; do
+   echo "host "$node >> $NODELIST
+done
+
+PROTEIN=t2r_trj7_frm1583
+PSF_FILE=t2r_trj7_frm1583.psf
+PDB_FILE=t2r_trj7_frm1583.pdb
+SHELL_THICKNESS=7
+EXTENSION=901-1000
+NAME_WORK_DIR=work_${PROTEIN}_${EXTENSION}
+PATH_WORK_DIR=/panasas/scratch/tekpinar/hemoglobin/WAXS/${NAME_WORK_DIR}
+PROT_PATH=${PATH_WORK_DIR}/MD_protein_in_water
+WAT_PATH=${PATH_WORK_DIR}/MD_water
+PAR_FILE1=/util/vmd/v1.8.6/lib/vmd/plugins/noarch/tcl/readcharmmpar1.0/par_all27_prot_lipid_na.inp
+PAR_FILE2=/util/vmd/v1.9/lib/vmd/plugins/noarch/tcl/readcharmmpar1.2/par_all27_prot_lipid_na.inp
+CFG_FILE=xs_${PROTEIN}.cfg
+shell_path=${PATH_WORK_DIR}/XS/protein_water_shell/
+blob_path=${PATH_WORK_DIR}/XS/water_blob/
+
+#Produce MD simulation parameters(or configuration file)!
+echo "q_min           =       0.01
+q_incr          =       0.01
+q_max           =       2.00
+n_sphere_points =       1500
+
+prm_file        =       ${PAR_FILE1}
+pdb_file        =       ${PDB_FILE}
+psf_file        =       ${PSF_FILE}
+
+work_directory  =       ${NAME_WORK_DIR}
+temperature     =       277
+shell_thickness =       ${SHELL_THICKNESS}
+
+# MD step size is 2 fs.
+
+n_min_steps                     =       1000
+n_pre-equilibration_steps       =       100000
+n_production_run_steps          =       500000
+n_steps_bet_snapshots           =       500
+n_processors                    =       8">${CFG_FILE}
+
+echo "Producing required files and folders!"
+/user/tekpinar/python_scripts/./run_pre_process ${CFG_FILE}
+
+#Initially, lets do protein+water. 
+#
+echo "Minimization step for 'protein+water':"
+CURRENTDIR=${PROT_PATH}/min
+date
+INFILE=$CURRENTDIR/min.namd
+charmrun ++remote-shell ssh ++verbose $NAMDHOME/namd2 +p$NP ++nodelist $NODELIST  $INFILE >$CURRENTDIR/namd.log 2>$CURRENTDIR/namd.err
+date
+
+echo "Equillibration step for 'protein+water':"
+CURRENTDIR=${PROT_PATH}/pre-equil
+date
+INFILE=$CURRENTDIR/equil.namd
+charmrun ++remote-shell ssh ++verbose $NAMDHOME/namd2 +p$NP ++nodelist $NODELIST $INFILE  >$CURRENTDIR/namd.log 2>$CURRENTDIR/namd.err
+date
+
+echo "Production step for 'protein+water':"
+CURRENTDIR=${PROT_PATH}/prod
+date
+INFILE=$CURRENTDIR/equil.namd
+charmrun ++remote-shell ssh ++verbose $NAMDHOME/namd2 +p$NP ++nodelist $NODELIST $INFILE  >$CURRENTDIR/namd.log 2>$CURRENTDIR/namd.err
+date
+
+Now, lets do just water simulation. 
+#
+echo "Minimization step for just water box:"
+CURRENTDIR=${WAT_PATH}/min
+date
+INFILE=$CURRENTDIR/min.namd
+charmrun ++remote-shell ssh ++verbose $NAMDHOME/namd2 +p$NP ++nodelist $NODELIST $INFILE  >$CURRENTDIR/namd.log 2>$CURRENTDIR/namd.err
+date
+
+echo "Equillibration step for just water box:"
+CURRENTDIR=${WAT_PATH}/pre-equil
+date
+INFILE=$CURRENTDIR/equil.namd
+charmrun ++remote-shell ssh ++verbose $NAMDHOME/namd2 +p$NP ++nodelist $NODELIST $INFILE  >$CURRENTDIR/namd.log 2>$CURRENTDIR/namd.err
+date
+
+echo "Production step for just water box:"
+CURRENTDIR=${WAT_PATH}/prod
+date
+INFILE=$CURRENTDIR/equil.namd
+charmrun ++remote-shell ssh ++verbose $NAMDHOME/namd2 +p$NP ++nodelist $NODELIST $INFILE >$CURRENTDIR/namd.log 2>$CURRENTDIR/namd.err
+date
+
+echo "Molecular dynamic simulation finished!"
+
+echo "Post processing of molecular dynamics data!"
+/user/tekpinar/python_scripts/./run_post_process ${CFG_FILE}
+
+#Run intensity calculation!
+    
+echo "Producing frames list 901 to 1000"
+perl produceFramesList.pl ${PROTEIN}_frms_lst_${SHELL_THICKNESS}A_${EXTENSION}.txt ${shell_path} ${blob_path} 901 1000
+
+echo "Calculating Waxs intensities for ${PROTEIN}"
+date
+./makowski-waxs.exe ${PROTEIN}_frms_lst_${SHELL_THICKNESS}A_${EXTENSION}.txt ${PROTEIN}_I_q_makowski_xs_${SHELL_THICKNESS}A_${EXTENSION}.dat > ${PROTEIN}_makowski-waxs_${SHELL_THICKNESS}A_${EXTENSION}.out
+date
+
+echo "Job finished!"
+\rm $NODELIST

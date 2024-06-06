@@ -74,15 +74,11 @@ def main():
 
     # Output file name is the date
     date = datetime.now().strftime("%Y-%m-%d")
-    outfile = f"raw-links-{date}.json"
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
-    save_to = os.path.join(args.outdir, outfile)
 
     # Save all slurm job links
     links = {}
-    if os.path.exists(save_to):
-        links = utils.read_json(save_to)
 
     # Create the driver
     driver = webdriver.Chrome()
@@ -92,17 +88,18 @@ def main():
     confirm_action("Browse to GitHub.com and login, and another 'yes'")
 
     # Allow timeout
-    driver.set_page_load_timeout(10)
+    driver.set_page_load_timeout(20)
 
     # These are different job submission directives
+    # Note: I wound up running these one at a time and ensuring we didn't hit a secondary rate limit
     directives = [
         "SBATCH",
-        "PBATCH",
+        "PBATCH",  # NOTE: pbatch had almost zero results
         "COBALT",
         "PBS",
         "OAR",
         "BSUB",
-        "FLUX",
+        "FLUX",  # These results seem a bit empty, or when they hit, false positives
     ]
 
     # Let's do a matrix across analyses and then HPC terms
@@ -165,6 +162,13 @@ def main():
             terms.append(f"{app_term}+{hpc_term}")
 
     for directive in directives:
+        # Save outfile based on directive
+        outfile = f"raw-links-{date}-{directive.lower()}.json"
+        save_to = os.path.join(args.outdir, outfile)
+
+        if os.path.exists(save_to):
+            links = utils.read_json(save_to)
+
         directive_url = f"https://github.com/search?q=%22%23{directive}%22"
         for term in terms:
             uid = f"{directive}-{term}"
@@ -181,8 +185,8 @@ def main():
                 url = f"{base_url}&p={page}"
                 driver.get(url)
 
-                # Sleep at least one second
-                sleep(random.choice(range(0, 1000)) * 0.001 + 1)
+                # Sleep 1-3 seconds
+                sleep(random.choice(range(100, 300)) * 0.01)
 
                 # This gets the whole page - this is easier to parse than with selenium
                 body = driver.execute_script(
@@ -190,6 +194,15 @@ def main():
                 )
 
                 # Use beautiful soup to parse it
+                if (
+                    "secondary rate limit" in body.lower()
+                    or "whoa there" in body.lower()
+                ):
+                    print("HIT RATE LIMIT?")
+                    import IPython
+
+                    IPython.embed()
+
                 soup = BeautifulSoup(body, "html.parser")
 
                 # Find all the direct links to save

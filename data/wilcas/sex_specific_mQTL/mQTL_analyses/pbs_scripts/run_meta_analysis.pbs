@@ -1,0 +1,25 @@
+#!/bin/bash
+#PBS -A st-dennisjk-1
+#PBS -l walltime=15:00:00,select=1:ncpus=32:mem=64gb
+#PBS -m be
+#PBS -M willcasazza@gmail.com
+#PBS -j 0-3
+################################################################################
+
+# First load environment
+module load gcc
+module load openblas
+module load gsl
+module load gnuplot
+source /scratch/st-dennisjk-1/wcasazza/.bashrc
+DATA="/scratch/st-dennisjk-1/wcasazza/sex_specific_mQTL/data"
+MQTL_SETS=( male female cross-sex sex-dependent )
+MQTL=${MQTL_SETS[$PBS_ARRAY_INDEX]}
+
+# Run meta-analysis
+echo "$DATA/delahaye_${MQTL}" > "$DATA/${MQTL}_besd.list"
+echo "/scratch/st-dennisjk-1/wcasazza/sex_specific_mQTL/data/richs_${MQTL}" >> "$DATA/${MQTL}_besd.list"
+smr_Linux --besd-flist "$DATA/${MQTL}_besd.list"\
+    --mecs\
+    --thread-num 32 \
+    --out "${DATA}/delahaye_richs_${MQTL}_mecs"

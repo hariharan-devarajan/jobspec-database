@@ -1,0 +1,34 @@
+#!/bin/bash
+#SBATCH --account=PAS2136
+#SBATCH --job-name=segment_test
+#SBATCH --time=00:10:00
+#SBATCH --ntasks=4
+#
+# Runs Snakemake pipeline that downloads, crops, and segments images.
+# There are three required positional arguments.
+# Usage:
+# sbatch SLURM_Snake <SNAKEFILE> <WORKDIR> <INPUTCSV>
+# - SNAKEFILE - snakefile you want to used
+# - WORKDIR - Snakemake working directory - contains output files
+# - INPUTCSV - Path to input CSV file specifying images to process
+
+# Stop if a command fails (non-zero exit status)
+set -e
+
+# Verify command line arguments
+SNAKEFILE=$1
+WORKDIR=$2
+
+# Activate Snakemake environment
+module load miniconda3/4.10.3-py37
+# Activate using source per OSC instructions
+source activate snakemake
+
+# Run pipeline using Snakemake
+snakemake \
+    --cores $SLURM_NTASKS \
+    --snakefile $SNAKEFILE \
+    --use-conda \
+    --directory $WORKDIR \
+
+chmod -R 774 $WORKDIR

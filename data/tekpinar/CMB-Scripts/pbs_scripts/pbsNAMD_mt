@@ -1,0 +1,42 @@
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -l walltime=99:00:00
+#PBS -l nodes=1:ppn=8:XEON
+#PBS -m e
+#PBS -j oe
+#PBS -q benchmark
+#PBS -o pbsNAMD_mt.out
+#PBS -N testNAMD
+#
+INFILE=/home/tekpinar/namd/inputscripts/run_md.conf
+OUTFILE=/home/tekpinar/namd/output/1goj_md_namd.log
+
+# Change to job submission directory
+#
+cd $PBS_O_WORKDIR
+#
+# load namd via module
+#
+. $MODULESHOME/init/bash
+module load namd
+#
+# Set number of processors to number requested from PBS
+#
+NP=`cat $PBS_NODEFILE | wc -l`
+echo "NAMDHOME = "$NAMDHOME
+#
+# construct namd nodes file from $PBS_NODEFILE
+#
+export NODELIST=tmp.$$
+echo "group main" > $NODELIST
+NODES=`cat $PBS_NODEFILE`
+for node in $NODES ; do
+   echo "host "$node >> $NODELIST
+done
+#
+# run apoa1 benchmark 
+#
+cd $PBS_O_WORKDIR
+#
+charmrun $NAMDHOME/namd2 +p$NP ++nodelist $NODELIST $INFILE > $OUTFILE
+\rm $NODELIST

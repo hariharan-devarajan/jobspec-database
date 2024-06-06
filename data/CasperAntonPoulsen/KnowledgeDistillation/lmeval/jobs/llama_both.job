@@ -1,0 +1,44 @@
+#!/bin/sh
+
+### General options
+### –- specify queue --
+#BSUB -q p1
+### -- set the job Name --
+#BSUB -J LMEval_llama_both
+### -- ask for number of cores (default: 1) --
+#BSUB -n 16
+### -- Select the resources: 1 gpu in exclusive process mode --
+#BSUB -gpu "num=1:mode=exclusive_process"
+### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
+#BSUB -W 24:00
+# request 5GB of system-memory
+#BSUB -R "span[hosts=1]"
+#BSUB -R "rusage[mem=11800MB]"
+### -- set the email address --
+# please uncomment the following line and put in your e-mail address,
+# if you want to receive e-mail notifications on a non-default address
+#BSUB -u caap@itu.dk
+### -- send notification at start --
+###BSUB -B
+### -- send notification at completion--
+#BSUB -N
+### -- Specify the output and error file. %J is the job-id --
+### -- -o and -e mean append, -oo and -eo mean overwrite --
+#BSUB -o /dtu/p1/johlau/logs/R-LMEval_llama_both_%J.out
+#BSUB -e /dtu/p1/johlau/logs/R-LMEval_llama_both_%J.err
+# -- end of LSF options --
+
+
+nvidia-smi
+# Load the cuda module
+module load cuda/12.1
+
+
+model_path="/dtu/p1/johlau/LMOps/minillm/results/llama/train/minillm_both/bs2-lr5e-06-G2-N1-NN1-lm1-len256/pe4_rs0.5_nr64_ln_sr_tm0.2/1000"
+model_name="llama_both_1000it"
+
+
+echo $model_name
+
+python3 -m lm_eval --model hf --model_args "pretrained=$model_path" --tasks "know_dist" --batch_size auto --max_batch_size 64 --device cuda:0 --output_path "../results/$model_name" --num_fewshot 0
+

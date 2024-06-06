@@ -1,0 +1,19 @@
+#!/bin/bash
+#BSUB -P TRN001
+#BSUB -W 00:05
+#BSUB -nnodes 1
+#BSUB -J h5py
+#BSUB -o h5py.%J.out
+#BSUB -e h5py.%J.err
+#BSUB -U TAPIA_THU
+
+cd $LSB_OUTDIR
+date
+
+module load gcc
+module load hdf5
+module load python
+
+source activate $HOME/.conda/envs/h5pympi-summit
+
+jsrun -n1 -r1 -a42 -c42 python3 hdf5_parallel.py

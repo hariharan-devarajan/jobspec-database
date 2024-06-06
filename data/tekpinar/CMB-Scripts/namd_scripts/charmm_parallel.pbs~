@@ -1,0 +1,40 @@
+#!/bin/bash
+##PBS -q debug
+#PBS -m e
+#PBS -l nodes=4:ppn=4
+#PBS -l walltime=72:00:00
+##PBS -M userid@buffalo.edu
+#PBS -o 1goj_final_min_pbs.out
+#PBS -j oe
+#PBS -N 1goj_final_min
+#PBS
+#
+# charmm input file
+#
+INFILE=$HOME/ortho_1goj/inputscripts/1goj_final_min.inp
+OUTFILE=$HOME/ortho_1goj/output/1goj_final_min.out
+#
+# generic setup and checks
+#
+ulimit coredumpsize 0
+ulimit -s unlimited
+echo "check module commands:"
+. $MODULESHOME/init/bash
+which module
+module load charmm
+#
+# charmm binary
+#
+echo "Using CHARMMEXE = "$CHARMMEXE
+NPROCS=`cat $PBS_NODEFILE | wc -l`
+#
+# goto dir from which job was submitted and run
+#  (allows standard output to go to PBS output file)
+#
+cd $PBS_O_WORKDIR
+date
+mpiexec $CHARMMEXE < $INFILE > $OUTFILE
+date
+#
+# remove scratch directory
+\rm -r $PBSTMPDIR

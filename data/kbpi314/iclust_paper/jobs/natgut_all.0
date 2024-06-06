@@ -1,0 +1,15 @@
+#!/bin/bash
+#BSUB -q gpu
+#BSUB -W 24:00
+#BSUB -J natgut_all.0
+#BSUB -P acc_clemej05a
+#BSUB -n 1
+#BSUB -R rusage[mem=24000]
+#BSUB -o %J.stdout
+#BSUB -eo %J.stderr
+#BSUB -L /bin/bash
+
+
+export PYTHONPATH=$PYTHONPATH:/hpc/users/buk02/tools/sandbox/lib/python3.7/site-packages/
+
+module load anaconda3 && source activate tfGPU && export http_proxy="http://nfs01.chimera.hpc.mssm.edu:3128/" && export https_proxy="https://nfs01.chimera.hpc.mssm.edu:3128/" && export ftp_proxy="http://nfs01.chimera.hpc.mssm.edu:3128/" && export rsync_proxy="http://nfs01.chimera.hpc.mssm.edu:3128/" && export no_proxy="localhost,127.0.0.1" && rm -rf /sc/arion/projects/clemej05a/kevin/iclust/outputs/jobs16 && mkdir /sc/arion/projects/clemej05a/kevin/iclust/outputs/jobs16 && for v in 'all_corr'; do for m in cc; do mkdir /sc/arion/projects/clemej05a/kevin/iclust/outputs/jobs16/natgut_plots_${v}_${m} && mkdir /sc/arion/projects/clemej05a/kevin/iclust/outputs/jobs16/natgut_results_${v}_${m} && python /hpc/users/buk02/Repositories/iclust/scripts/plot_correlations.py -i /sc/arion/projects/clemej05a/kevin/iclust/inputs/df_ca.tsv -o /sc/arion/projects/clemej05a/kevin/iclust/outputs/jobs16/natgut_plots_${v}_${m}/ --unlabeled -s 0 -lb 0.0001 -ub 0.99 -dl ca --axis_off --no_fixaxis -m $m && python /hpc/users/buk02/Repositories/iclust/scripts/image_cluster.py -i /sc/arion/projects/clemej05a/kevin/iclust/outputs/jobs16/natgut_plots_${v}_${m}/ -o /sc/arion/projects/clemej05a/kevin/iclust/outputs/jobs16/natgut_results_${v}_${m}/ -l False -min 2 -max 10 -m $m; done; done

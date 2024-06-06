@@ -1,0 +1,17 @@
+#!/bin/bash
+#BSUB -P TRN001
+#BSUB -W 00:10
+#BSUB -nnodes 1
+#BSUB -J galaxy
+#BSUB -o galaxy.%J.out
+#BSUB -e galaxy.%J.err
+#BSUB -U TAPIA_THU
+
+cd $LSB_OUTDIR
+date
+
+module load python hdf5 gcc
+
+source activate $HOME/.conda/envs/h5pympi-summit
+
+jsrun -n1 -r1 -a8 -c8 python3 -u galaxy.py

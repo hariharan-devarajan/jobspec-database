@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# QUEUE
+#BSUB -q airoldi
+
+# EDIT THE EMAIL-ADDRESS BELOW TO YOUR FAS EMAIL:
+#BSUB -u jbischof@fas.harvard.edu
+
+# THE JOB ARRAY:
+#BSUB -J "get_svm_liblinear_train"
+
+# THE COMMAND TO GIVE TO R, CHANGE TO THE APPROPRIATE FILENAME:
+model=svm
+main_dir=/n/airoldifs2/lab/jbischof/reuters_output/
+class_dir=${main_dir}mmm_class_out/
+cutoff=500
+out_dir=${class_dir}${model}_liblinear_fits${cutoff}/
+
+# Create output directory if doesn't already exist
+if [ ! -d $out_dir ]
+then
+   mkdir $out_dir
+fi
+
+python ../mmm_class_functions/liblinear_train.py $main_dir $cutoff $model

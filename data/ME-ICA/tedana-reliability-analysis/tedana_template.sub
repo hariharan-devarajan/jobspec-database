@@ -1,0 +1,30 @@
+#!/bin/bash
+#---Number of cores
+#BSUB -n 4
+#BSUB –R "span[ptile=4]"
+
+#---Job's name in LSF system
+#BSUB -J tedana{dset}_{seed}
+
+#---Error file
+#BSUB -eo errorfiles/tedana_{dset}_{seed}
+
+#---Output file
+#BSUB -oo outfiles/tedana_{dset}_{seed}
+
+#---LSF Queue name
+#BSUB -q PQ_nbc
+
+##########################################################
+# Set up environmental variables.
+##########################################################
+export NPROCS=`echo $LSB_HOSTS | wc -w`
+export OMP_NUM_THREADS=$NPROCS
+
+. $MODULESHOME/../global/profile.modules
+
+##########################################################
+##########################################################
+source /home/data/nbc/data-analysis/py3_environment
+
+python run_tedana.py {dset} {seed}

@@ -1,0 +1,43 @@
+#!/bin/bash
+#PBS -lnodes=1:ppn=16:localwork
+#PBS -lwalltime=4:00:00
+#PBS -A nn4654k
+
+module load gcc/4.9.1
+module load cmake/3.1.0
+module load python/2.7.3
+module load gsl/1.15
+module load hdf5/1.8.9
+
+PSI4_TMPDIR=/local/work/roberto/scratch-RDR-gcc4.9.1-asan
+mkdir -p $PSI4_TMPDIR
+export PSI4_TMPDIR
+export NPROCS=`lscpu -p | egrep -v '^#' | wc -l`
+export CTEST_MAKE_NUM_PROCS=$NPROCS
+export PSI4_NUM_MPI_PROCS=1
+
+export PYTHON=`which python`
+
+TMP_DIR=/global/work/roberto/tmprunpsi4/RDR-gcc4.9.1-asan
+mkdir -p $TMP_DIR
+
+git clone git@github.com:psi4/psi4.git $TMP_DIR
+
+cd $TMP_DIR
+
+export PSI4DATADIR=$TMP_DIR/lib
+mkdir -p $PSI4_TMPDIR/psi4scr
+export PSI4_SCRATCH=$PSI4_TMPDIR/psi4scr
+
+export CTEST_SCRIPT=$TMP_DIR/cdash/CDashASanGCC.cmake
+export CTEST_SOURCE_DIRECTORY=$TMP_DIR
+export CTEST_BINARY_DIRECTORY=$TMP_DIR/obj
+
+# No need to pass the number of processors, the CTest script knows how to do it
+ctest -S $CTEST_SCRIPT 
+
+cd
+rm -rf $PSI4_TMPDIR $TMP_DIR
+
+exit 0
+

@@ -1,0 +1,17 @@
+#!/bin/bash
+#BSUB -J seqdeep_model_run
+#BSUB -q gpuqueue 
+#BSUB -gpu "num=1"
+#BSUB -n 2
+#BSUB -R "rusage[mem=4] span[ptile=2]"
+#BSUB -W 23:00
+#BSUB -o %J.stdout
+#BSUB -eo %J.stderr
+
+# set up env, cd to source
+cd ~/projects/SeqDemote/src/
+module load cuda/9.1
+module load cudnn/7.0-cuda9
+
+# run model
+python pytorch_train.py $MODEL

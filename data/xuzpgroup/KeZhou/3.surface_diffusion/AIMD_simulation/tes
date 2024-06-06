@@ -1,0 +1,10 @@
+#!/bin/sh
+#BSUB -J K
+#BSUB -q priority
+#BSUB -n 12
+#BSUB -o %J.output -e %J.err
+#BSUB -W 240:00
+#BSUB -a intelmpi
+#BSUB -R "span[ptile=12]"
+
+mpirun -np 12 /home/xuzp/bin/cp2k2.4.popt -i cl.inp 

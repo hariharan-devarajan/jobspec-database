@@ -25,8 +25,9 @@ Then download files, from the root, targeting the output file of interest.
 python scripts/get_jobspecs.py ./scripts/data/raw-links-may-23.json --outdir ./data
 ```
 
-Note that the data now is just a trial run! We have 11k+ unique results from just that, wowza.
-We will want to optimize our search term strategy to get across a set of applications and scopes. After this we currently have `19544` scripts.
+Note that the data now is just a trial run! For the first run, we had 11k+ unique results from just a trial run.
+For the second run, that went up to `19544`. When I added more applications, for half of the run it was 25k.
+The current total is `31932` scripts. I didn't add the last run of flux because I saw what I thought were false positives.
 
 ## Analysis
 

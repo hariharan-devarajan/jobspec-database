@@ -1,0 +1,53 @@
+#!/bin/bash
+# must be run with sbatch plot_ts.sl [xyts file path] [srf file path] [output ts file path] [management database location] [realization name]
+
+#PBS -N plot_ts
+#PBS -V
+#PBS -q normal
+#PBS -A inhouse
+#PBS -l select=1:ncpus=36
+#PBS -l walltime=00:30:00
+
+#module purge
+#module add gcc/7.2.0 openmpi/3.1.0 craype-network-opa craype-mic-knl
+#export gmsim_root=/home01/x2319a02/gmsim
+#export PYTHONPATH=$gmsim_root/Environments/nurion/workflow
+#source $gmsim_root/Environments/nurion/virt_envs/python3_nurion/bin/activate
+export SLURM_JOB_ID="${PBS_JOBID/.pbs/}"
+export SLURM_CPUS_PER_TASK=$(qstat $SLURM_JOB_ID -f | grep "used.ncpus" | cut -d"=" -f2 | bc)
+export SLURM_NNODES=$(qstat $SLURM_JOB_ID -f | grep "List.nodect" | cut -d"=" -f2 | bc)
+
+
+#The following params are given with -v option
+#XYTS_PATH=$1
+#SRF_PATH=$2
+#OUTPUT_TS_PATH=$3
+#MGMT_DB_LOC=$4
+#SRF_NAME=$5
+
+script_start=`date`
+echo "script started running at: $script_start"
+runtime_fmt="%Y-%m-%d_%H:%M:%S"
+timestamp=`date +%Y%m%d_%H%M%S`
+
+start_time=`date +${runtime_fmt}`
+echo ___plotting ts___
+python $gmsim/workflow/workflow/automation/execution_scripts/add_to_mgmt_queue.py $MGMT_DB_LOC/mgmt_db_queue $SRF_NAME plot_ts running $SLURM_JOB_ID --start_time "$start_time" --nodes $SLURM_NNODES --cores $SLURM_CPUS_PER_TASK --wct 00:30:00
+cmd="python $gmsim/visualization/animation/plot_ts.py --srf $SRF_PATH --output $OUTPUT_TS_PATH -n 36 $XYTS_PATH"
+echo $cmd
+res=`$cmd`
+
+exit_val=$?
+
+end_time=`date +$runtime_fmt`
+echo $end_time
+
+if [[ $exit_val == 0 ]]; then
+    #passed
+
+    python $gmsim/workflow/workflow/automation/execution_scripts/add_to_mgmt_queue.py $MGMT_DB_LOC/mgmt_db_queue $SRF_NAME plot_ts completed $SLURM_JOB_ID --end_time "$end_time"
+
+else
+    python $gmsim/workflow/workflow/automation/execution_scripts/add_to_mgmt_queue.py $MGMT_DB_LOC/mgmt_db_queue $SRF_NAME plot_ts failed $SLURM_JOB_ID --error "$res" --end_time "$end_time"
+fi
+

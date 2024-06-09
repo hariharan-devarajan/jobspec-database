@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 
 
-import tensorflow as tf
-import shlex
-import hashlib
-import fnmatch
-import os
-import sys
-import re
-
 import argparse
+import fnmatch
+import hashlib
+import os
+import re
+import shlex
+import sys
+
 import rse.utils.file as utils
+import tensorflow as tf
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -67,7 +67,7 @@ def combine_data(data_file, args, files):
 
 # directives and special punctuation
 directive_regex = "#(SBATCH|PBATCH|COBALT|PBS|OAR|BSUB|FLUX)"
-punctuation = "!\"#$%&'()*+,.:;<=>?@[\\]^`{|}~\n"
+punctuation = "!\"#%&'()*,;<>?[\\]^`{|}~\n"
 
 
 # Keep track of those we skip for false positives
@@ -77,6 +77,11 @@ skips = set()
 def tokenize(lines):
     """
     Special tokenize for scripts, and parsing of flag directives
+
+    - and _ should be replaced with spaces
+    "." are usually extensions and we are also splitting, so the
+    extension becomes a token.
+    Keep AT so the emails get filtered out
     """
     global skips
 
@@ -156,7 +161,7 @@ def tokenize(lines):
                     add_flag(key, True)
 
     content = " ".join(lines)
-    content = re.sub("(_|-|\/)", " ", content)
+    content = re.sub("(_|-|\/|\.|\+|:|=|$)", " ", content)
     lowercase = tf.strings.lower(content)
     content = tf.strings.regex_replace(lowercase, "[%s]" % re.escape(punctuation), "")
 

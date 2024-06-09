@@ -86,7 +86,13 @@ You can find tokenized lines (with one jobspec per line), the directive counts, 
 I was thinking about adding doc2vec, because word2vec is likely making associations between terms in different documents,
 but I don't think anyone is using doc2vec anymore, because the examples I'm finding using a deprecated version of tensorflow that
 has functions long removed. We could use the old gensim version, but I think it might be better to think of a more modern approach.
-Note that I'm currently writing this - will push the final result when I finish.
+I decided to try [top2vec](https://github.com/ddangelov/Top2Vec).
+
+```bash
+python scripts/run_top2vec.py
+```
+
+I had to run this on a large VM for it to work. See the topics in [scripts/data/combined/wordclouds](scripts/data/combined/wordclouds). We can likely tweak everything but I like how this tool is approaching it (see docs in [ddangelov/Top2Vec](https://github.com/ddangelov/Top2Vec)).
 
 
 ## License

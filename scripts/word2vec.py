@@ -160,7 +160,7 @@ def combine_data(data_file, args, files):
             fd.write(" ".join(tokens) + "\n")
 
 
-punctuation = "!\"#$%&'()*+,.:;<=>?@[\\]^`{|}~\n"
+punctuation = "!\"#%&'()*,;<>?[\\]^`{|}~\n"
 
 
 def tokenize(lines):
@@ -171,7 +171,7 @@ def tokenize(lines):
     lines = [x for x in lines if "#!" not in x]
 
     content = " ".join(lines)
-    content = re.sub("(_|-|\/)", " ", content)
+    content = re.sub("(_|-|\/|\.|\+|:|=|$)", " ", content)
     lowercase = tf.strings.lower(content)
     content = tf.strings.regex_replace(lowercase, "[%s]" % re.escape(punctuation), "")
 

@@ -4,14 +4,13 @@
 import argparse
 import os
 import re
-import string
 import sys
+
+import matplotlib.pyplot as plt
 import pandas
-import numpy
 import rse.utils.file as utils
 import seaborn as sns
 from sklearn.metrics.pairwise import cosine_similarity
-import matplotlib.pyplot as plt
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -76,7 +75,7 @@ def main():
 
     # Each line is a jobspec
     vectorizer = TfidfVectorizer(max_features=500)
-    X = vectorizer.fit_transform(corpus)
+    vectorizer.fit_transform(corpus)
     features = vectorizer.get_feature_names_out()
 
     # Filter to shared set
@@ -87,9 +86,9 @@ def main():
     plt.figure(figsize=(12, 12))
     flat = cosines.to_numpy().flatten()
     sns.histplot(flat)
-    plt.title(f"Distribution of values for cosine matrix")
+    plt.title("Distribution of values for cosine matrix")
     plt.savefig(
-        os.path.join(args.output, f"costines-histogram.png"),
+        os.path.join(args.output, "costines-histogram.png"),
         dpi=300,
         bbox_inches="tight",
     )
@@ -113,10 +112,10 @@ def main():
     g = sns.clustermap(filtered)
     g.ax_heatmap.set_xticklabels(g.ax_heatmap.get_xmajorticklabels(), fontsize=5)
     g.ax_heatmap.set_yticklabels(g.ax_heatmap.get_ymajorticklabels(), fontsize=5)
-    plt.title(f"Filtered Word2Vec Term Cosine Matrix")
+    plt.title("Filtered Word2Vec Term Cosine Matrix")
     plt.tight_layout()
     plt.savefig(
-        os.path.join(args.output, f"filtered-cosines-heatmap.pdf"), bbox_inches="tight"
+        os.path.join(args.output, "filtered-cosines-heatmap.pdf"), bbox_inches="tight"
     )
     plt.clf()
 

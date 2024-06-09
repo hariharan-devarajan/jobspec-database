@@ -1,0 +1,491 @@
+# Lines preceded by "#PBS" are directives for Torque/PBS
+
+ Lines that begin with #SBATCH specify commands to be used by SLURM for scheduling. They are not comments.
+
+FLUXNAMEFILE[@]} > 0 ]]
+
+PBS	–j	oe	
+
+ Note that "#SBATCH" is not a comment, but "# SBATCH" is (note the space after "#")
+
+#PBS configure
+
+ Remove SLURM #SBATCH tags
+
+ General conditions are set by what follows #SBATCH lines  
+
+SBATCH XXXqueueXXX
+
+PBS  output=para.out
+
+ Lines that do not start with # or #SBATCH are commands that will run.
+
+FLUXBOX {{{
+
+ NOTE: Lines starting with "#SBATCH" are valid SLURM commands or statements,
+
+ Script directive: #BSUB                                                                                      #
+
+SBATCH hetjob
+
+## slurm option lines start with #SBATCH
+
+ **** Put all #SBATCH directives above this line! ****
+
+ submit an PBS script based on the #PBS resources specified below.
+
+SBATCH flags for building the $script_name_build script. Press 'q' when finished."
+
+## Lines "#SBATCH" configure the job resources
+
+SBATCH __mail_user zzangmane@snu.ac.kr
+
+#SBATCH'/'#SBATCH'/gI' matrix${count}
+
+#                   b) Lines that begin with #SBATCH will be ignored by the interpreter and read by the job scheduler 
+
+# Please note that anything after the characters "#SBATCH" on a line
+
+PBS "$MEMREQUEST                         >>$sgeFile
+
+ 中间不可以有非 #SBATCH 开头的行
+
+BSUB –J MPIJob ### set the job Name
+
+#the following lines starting with `#SBATCH` are directives to the scheduling system, slurm
+
+   Submit as an Sbatch job (edit Sbatch arguments in the #SBATCH directives
+
+#PBS_O_WORKDIR = "${PBS_O_WORKDIR}/artificial_intelligence/repos/fdir"
+
+ The following are embedded QSUB options. The syntax is #PBS (the # does
+
+ Typcially, the # represents a comment.However, #SBATCH is
+
+PBS directives' 1>&2
+
+ Check each line in the file to see if they start with #PBS or #SGE
+
+“#SBATCH” directives that convey submission options:
+
+ Put #PBS in front of one of the following queues that you have access to
+
+PBS   [whatever other options]
+
+SBATCH ${sbatchOutputFilename}
+
+PBS \$1 \$2"
+
+## #SBATCH directives need to be in the first part of the jobscript
+
+SBATCH ${sbatchCpusPerTask}
+
+FLUXDATA_DEVNAME=$(get_dev_from_label ${LUKS_PREFIX_LABEL}${FLUXDATA_LABEL})
+
+BSUB 
+
+PBS .*select[^,]*model' $tmpscript > /dev/null ; then
+
+ at the beginning of the script, lines beginning with "#SBATCH" are read by
+
+PBS" $main >> _main
+
+FLUXIONFindingExtraWINotice="Trova interfacce extra wireless..."
+
+SBATCH $flag" >> run_image_sub.sh
+
+## slurm job options: line must begin with '#SBATCH'
+
+ sbatch scripts must specify `#SBATCH` directives prior to any regular command.
+
+#PBS_NUM_PPN=20
+
+ Note anything after #SBATCH is a command
+
+ Lines starting with #SBATCH specify options for the scheduler.
+
+ the interpreter.  Lines beginning with #SBATCH are directives
+
+BSUB ${lsf}
+
+You can control the resources and scheduling with '#SBATCH' settings
+
+ Script directive: #SBATCH                                                                                                    #
+
+PBS ");
+
+ or example setting.  Lines starting with "##PBS" are ignored; to enable
+
+ The lines starting with #PBS are queuing system flags:
+
+ Use #SBATCH <option>=<value> to configure. Do not uncomment lines with #SBATCH
+
+PBS_ARRAYID=22
+
+ 2. #SBATCH directives
+
+ submission file when preceeded by '#SBATCH'. These lines will be
+
+ Other commands must follow all #SBATCH directives...
+
+SBATCH $flag" >> $script_name_build
+
+### (Remember for Slurm #SBATCH, one # is active, two or
+
+# Do not put any commands or blank lines before the #SBATCH lines
+
+ Option                        | Values                             | #SBATCH only | Export only |
+
+PBS_QUE = '1nd'#PBS_QUE = '${queue}'#g" > Template/Source/run_config_tmp.inc
+
+SBATCH: Job submission will be attempted despite warnings.
+
+参数在脚本中可以加上前缀“#SBATCH”指定，和在命令参数中指定功能一致，如果脚本中的参数和命令指定的参数冲突，则命令中指定的参数优先级更高。在此处指定后可以直接sbatch ./run.sh 提交。
+
+PBS '
+
+# ALL SBATCH COMMANDS WILL START WITH #SBATCH ##
+
+FLUXDATA_DEVNAME=""
+
+ Options to sbatch start with '#SBATCH'. To disable an option, change
+
+# Submit job to "Open" allocation if the next line begins with #PBS rather than ##PBS
+
+"#SBATCH" directives that convey submission options:
+
+ like "##PBS" are considered "commented out" by the batch system
+
+PBS .*select" $tmpscript > /dev/null ; then
+
+#SBATCH SLURM_UMASK=022 
+
+FLUXBOX_VERSION=\"\([^\"]\+\)\"#FLUXBOX_VERSION=\"${FLUXBOX_VERSION}\"#" \
+
+SBATCH _c          10
+
+ NOTE: lines that begin with "#PBS" are not interpreted by the shell but ARE 
+
+ with #SBATCH are actually commands to the SLURM scheduler.
+
+ Script directive: #PBS                                                                       #
+
+PBS " $MEMREQUEST                                 >>$sgeFile
+
+        A line beginning with #PBS is a PBS directive.
+
+PBS " $MEMREQUEST                   >>$sgeFile
+
+SBATCH flags for building the morphometric stats workflow script. Press 'q' when finished."
+
+SBATCH $flag" >> run_image.sh
+
+BSUB –R "span[ptile=4]"
+
+PBS_NUM_PPN=$NSLOTS
+
+COBALT {{ sched_flags }}
+
+SBATCH ${sbatchSSD}
+
+PBS" $main >> _jobheader || true
+
+# Submit job to "Open" allocation if next line begins #PBS (rather than ##PBS)
+
+PBS_ARRAY_INDEX=20
+
+#PBS_ARRAY_INDEX=10
+
+   Submit as a Cobalt job (edit Cobalt arguments in the #COBALT directives
+
+ IMPORTANT: The lines beginning #PBS set various queuing parameters, they are not simple comments
+
+ use ##SBATCH 
+
+FLUX_CAPACITOR_VERSION=1.6.1
+
+ a comment.  If you need to comment out an #SBATCH line 
+
+ Torque (PBS) directives "#PBS" start here:  
+
+SBATCH" $main >> _jobheader || true
+
+FLUXIONFindingExtraWINotice="Buscando interfaces inalámbricas extrañas..."
+
+SBATCH ${sbatchMemory}
+
+PBS "$MEMREQUEST                        >>$sgeFile
+
+I don't want not finding any #PBS to fail
+
+ Des paramètres sbatch peuvent être spécifiés dans ce fichier sous la forme : #SBATCH <param>
+
+but, if we do that, we get rid of all #PBS options that user might be setting inside main..
+
+## Slurm option lines start with #SBATCH 
+
+ file that collects all '^#PBS ' lines inside the given job
+
+OAR_JOB_ID=12236582
+
+COBALT 'getenv(MAIL_ARG)'
+
+ cannot have any shell script command before #SBATCH clause, not even vars declaration
+
+PBS
+
+SBATCH ${additionalSlurmOptions}" >> "${submissionScript}"
+
+SBATCH ${sbatchQueue}
+
+       A line beginning with #PBS is a PBS directive.
+
+ User should set shell variables and #PBS settings below:
+
+SBATCH packjob
+
+SBATCH ${sbatchNTasks}
+
+       "##SBATCH" line means to remove one # and start with #SBATCH to be a
+
+SBATCH gputest
+
+PBS'
+
+ tmp file for job script contents (used for '#PBS' parsing)
+
+PBS_JOBID=1365082.nid11293
+
+## sbatch configuration parameters must start with #SBATCH and must precede any other commands.
+
+ The #PBS must be used to specify PBS Pro options
+
+BSUB"
+
+ The lines starting with #BSUB are interpreted by the Resource Manager (RM) as lines that contain options for the RM
+
+ Need to use variables OUTSIDE of this script, #SBATCH doesn't support variables: https://help.rc.ufl.edu/doc/Using_Variables_in_SLURM_Jobs
+
+#PBS_O_WORKDIR=$(pwd)
+
+SBATCH XXXextra5XXX
+
+SBATCH XXXextra3XXX
+
+PBS .*nodes=.*:ppn=" $tmpscript > /dev/null ; then
+
+PBS "$MEMREQUEST                                     >>$sgeFile
+
+SBATCH WARNING:
+
+SBATCH" ]]; then
+
+SBATCH ${parsable}
+
+SBATCH $flag" >> run_image_stats.sh
+
+ Torque directives (#PBS) must always be at the start of a job script!
+
+PBS ...
+
+ with "#SBATCH " followed by flags that would otherwise be passed on
+
+SBATCH: For more info see https://docs.alliancecan.ca/wiki/Mist
+
+FLUX_INGRID_PATH=${FLUX_ROOT_PATH}/nd34
+
+copy all #PBS headers
+
+ Reference the PBS Pro User Guide for #PBS directive options.
+
+*#PBS}
+
+PBS"
+
+ If a script is specified, it will only help gives further options to PBS with the #PBS directives.
+
+PBS @qopts@
+
+SBATCH flags for building the preprocessing workflow script. You should enter the array flag here. Press 'q' when finished."
+
+ IMPORTANT: The lines beginning #PBS various queuing parameters, they are not simple comments
+
+PBS_o_WORKDIR;
+
+ (it has #PBSs from above)
+
+PBS " $MEMREQUEST                                      >>$sgeFile
+
+ If we have #PBS commands or #SGE commands
+
+ Multiple hashes, like `##SBATCH`, are comments and ignored.
+
+SBATCH ${sbatchScratchStorage}
+
+ The commands for slurm start with #SBATCH
+
+COBALT_JOBSIZE=1
+
+BSUB \$1 \$2"
+
+            A line beginning with #PBS is a PBS directive.
+
+  Code is allowed after this point.  No more #SBATCH lines will be recognized.
+
+PBS $resources
+
+ Any other commands must follow all #SBATCH directives...
+
+SBATCH 
+
+PBS does not appear to have an easily accesible env variable for this
+
+       while those starting with "#" and "##SBATCH" are comments.  Uncomment
+
+## Any lines started with #PBS are not comments,
+
+ Other commands must follow all #SBATCH directives.
+
+SBATCH" $0
+
+PBS –q workq
+
+BSUB –R “span[ptile=40]” ### ask for 40 cores per node
+
+ Remove LSF #BSUB tags
+
+SBATCH gpu
+
+SBATCH	...
+
+BSUB cwd $wd
+
+## Slurm option lines start with #SBATCH
+
+PBS .*ngpus" $tmpscript > /dev/null ; then
+
+PBS M kartshy@gmail.com
+
+ Lines beginning with #SBATCH are special commands to configure the job.
+
+PBS Job
+
+SBATCH __gpus      1
+
+PBS ?N test_matlab
+
+SBATCH" $slurmScript >> $job || true >> $job
+
+ Any other commands must follow the #SBATCH directives
+
+ #PBS_ARRAY_INDEX=1
+
+SBATCH XXXextra4XXX
+
+SBATCH –gres=gpu:rtx3080:1
+
+PBS 
+
+ A Slurm batch file is, in short, a Bash script with some special comments that start with "#SBATCH".
+
+PBS or #SGE. condor_qsub will parse the batch file
+
+PBS .*ncpus" $tmpscript > /dev/null ; then
+
+PBS  ngpus=1
+
+BSUB XXXextra5XXX
+
+PBS .*mpiprocs" $tmpscript > /dev/null ; then
+
+SBATCH $job_option\n"
+
+SBATCH flags for building the script. Press 'q' when finished."
+
+###PBS JOB OPTIONS
+
+OAR_JOB_ID=project_name #may not work
+
+PBS .*nodes" $tmpscript > /dev/null ; then
+
+BSUB cwd /gpfs/projects/cek26
+
+SBATCH'
+
+PBS	–N blast	
+
+#SBATCH'/'#SBATCH'/gI' matrix${countf}
+
+SBATCH ${sbatchMailTo}
+
+BSUB "span[ptile=16]"
+
+PBS .*select[^,]*mem' $tmpscript > /dev/null ; then
+
+PBS $rargs
+
+PBS_JOBID and JOBID is empty/not set
+
+ NOTE: lines that begin with "#PBS" are not interpreted by the shell but ARE
+
+BSUB $HOME/err
+
+## Note: No commands may be executed until after the #PBS lines
+
+PBS_ARRAY_INDEX=1
+
+PBS_O_WORKDIR
+
+SBATCH __mem       20G
+
+ The #PBS must be used to specify Torque options
+
+ Parameters for slurm (don't remove the # in front of #SBATCH!)
+
+SBATCH
+
+ The lines that start with #SBATCH are read by slurm to set up the job
+
+###PBS_ARRAY_INDEX=5
+
+SBATCH ${sbatchJobName}
+
+SBATCH [whatever other options]
+
+SBATCH __mail_type END
+
+ Lines that begin with #SBATCH specify commands to be used by SLURM for scheduling
+
+SBATCH ${sbatchTime}
+
+# Lines starting with #SBATCH are read by Slurm. Lines starting with ## are comments.
+
+PBS	…
+
+OAR_JOB_ID=12239573
+
+SBATCH: 2 warnings were found.
+
+# Submit job to "Open" allocation if next line begins #PBS
+
+ comment out a directive you must add another # to the start: ##PBS.
+
+SBATCH __time      96:00:00
+
+ like "##PBS" are considered "commented out" by the batch system 
+
+PBS_NUM_PPN=4
+
+ adding a second # (e.g. ##SBATCH lines will not be processed
+
+PBSnodeFile=`cat $PBS_NODEFILE`
+
+#PBS depend=afterok:<jobid>:<jobid>
+
+ You can control the resources and scheduling with '#SBATCH' settings
+
+SBATCH ${sbatchMailAlerts}
+
+ sbatch will read any lines that start with "#SBATCH" and will
+
+SBATCH __job_name  gpt

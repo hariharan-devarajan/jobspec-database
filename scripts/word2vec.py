@@ -146,15 +146,41 @@ def combine_data(data_file, args, files):
     seen = set()
     with open(data_file, "w") as fd:
         for file in files:
-            print(f"Writing file {file}")
+            print(f"Adding jobspec {file}")
             # 1. Step 1, ensure we don't duplicate files
             digest = content_hash(file)
             if digest in seen:
                 print(f"Found duplicate file {file}")
                 continue
             seen.add(digest)
-            content = "".join(utils.read_file(file))
-            fd.write(content)
+            content = utils.read_file(file)
+            tokens = tokenize(content)
+
+            # Write each "document" on a single line
+            fd.write(" ".join(tokens) + "\n")
+
+
+punctuation = "!\"#$%&'()*+,.:;<=>?@[\\]^`{|}~\n"
+
+
+def tokenize(lines):
+    """
+    Special tokenize for scripts, and parsing of flag directives
+    """
+    # Get rid of hash bangs
+    lines = [x for x in lines if "#!" not in x]
+
+    content = " ".join(lines)
+    content = re.sub("(_|-|\/)", " ", content)
+    lowercase = tf.strings.lower(content)
+    content = tf.strings.regex_replace(lowercase, "[%s]" % re.escape(punctuation), "")
+
+    # Convert from EagerTensor back to string
+    content = content.numpy().decode("utf-8")
+    tokens = content.split()
+
+    # Replace underscore - hyphen with space (treat like token / word)
+    return tokens
 
 
 def main():

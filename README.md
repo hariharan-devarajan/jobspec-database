@@ -37,6 +37,29 @@ You can run:
 python scripts/word2vec.py --input ./data
 ```
 
+Updates to the above on June 9th:
+
+- Better parsing to tokenize 
+  - we combine by space instead of empty space so words at end aren't combined (this was a bug)
+  - punctuation that should be replaced by space instead of empty space honored (dashes, underscore, etc)
+  - hash bangs for shell parsed out
+  - better tokenization and recreation of content
+  - each script is on one line (akin to how done for word2vec)
+  
+I realize that we probably want doc2vec, because word2vec is likely making associations between terms in different documents.
+We want to maintain the level of the script, and further, to be able to associate job parameters with specific ones.
+We are going to use [tf-doc2vec](https://github.com/chao-ji/tf-doc2vec) and we will only need to prepare our data.
+
+```bash
+cd ./scripts
+git clone git@github.com:chao-ji/tf-doc2vec.git doc2vec
+git clone git@github.com:chao-ji/tf-word2vec.git word2vec
+cd ../
+python scripts/run_doc2vec.py --input ./data
+```
+
+Note that I'm currently writing this - will push the final result when I finish.
+
 ## License
 
 HPCIC DevTools is distributed under the terms of the MIT license.

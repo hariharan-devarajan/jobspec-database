@@ -220,7 +220,7 @@ def main():
         output_sequence_length=sequence_length,
     )
 
-    # We need to combine all files into one
+    # We need to combine all files into one - and then run tfidf to get rid of crap
     data_file = os.path.join(args.output, "combined-jobspecs.txt")
     if not os.path.exists(data_file):
         combine_data(data_file, args, files)

@@ -50,6 +50,22 @@ Updates to the above on June 9th:
   - better tokenization and recreation of content
   - each script is on one line (akin to how done for word2vec)
 
+I think it would be reasonable to create a similarity matrix, specifically cosine distance between the vectors.
+This will read in the metadata.tsv and vectors.tsv we just generated.
+
+```bash
+python scripts/vector_matrix.py --vectors ./scripts/data/combined/vectors.tsv --metadata ./scripts/data/combined/metadata.tsv
+```
+
+The above does the following:
+
+1. We start with our jobspecs that are tokenized according to the above.
+2. We further remove anything that is purely numerical
+3. We use TF-IDF to reduce the feature space to 300 terms
+4. We do a clustering of these terms to generate the resulting plot.
+
+The hardest thing is just seeing all the terms. I messed with JavaScript for a while but gave up for the time being, the data is too big for the browser
+and likely we need to use canvas.
 
 ### 2. Directive Counts
 
@@ -71,6 +87,7 @@ I was thinking about adding doc2vec, because word2vec is likely making associati
 but I don't think anyone is using doc2vec anymore, because the examples I'm finding using a deprecated version of tensorflow that
 has functions long removed. We could use the old gensim version, but I think it might be better to think of a more modern approach.
 Note that I'm currently writing this - will push the final result when I finish.
+
 
 ## License
 

@@ -92,8 +92,18 @@ I decided to try [top2vec](https://github.com/ddangelov/Top2Vec).
 python scripts/run_top2vec.py
 ```
 
+For word2vec:
+
+ - continuous bag of words: we create a window around the word and predict the word from the context
+ - skip gram: we create the same window but predict the context from the word (supposedly slower but better results)
+
 I had to run this on a large VM for it to work. See the topics in [scripts/data/combined/wordclouds](scripts/data/combined/wordclouds). We can likely tweak everything but I like how this tool is approaching it (see docs in [ddangelov/Top2Vec](https://github.com/ddangelov/Top2Vec)).
 
+
+#### 4. LC Jobspec Database
+
+- Total unique jobspec jsons: 210351
+- Total with BatchScript: 116117
 
 ## License
 

@@ -103,6 +103,9 @@ And then to explore (finding matches for a subset of words):
 ```
 python3 scripts/explore_top2vec.py
 python3 scripts/explore_top2vec.py --outname top2vec-jobspec-database-learn.md --model ./scripts/data/combined/wordclouds/top2vec-with-doc2vec-learn.model 
+
+# Deep learn (highest quality vectors), takes about 6-7 hours to run 128 GB ram CPU instance
+python3 scripts/explore_top2vec.py --outname top2vec-jobspec-database-deep-learn.md --model ./scripts/data/combined/wordclouds/top2vec-with-doc2vec-deep-learn.model 
 ```
 
 

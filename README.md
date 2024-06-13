@@ -89,8 +89,22 @@ has functions long removed. We could use the old gensim version, but I think it 
 I decided to try [top2vec](https://github.com/ddangelov/Top2Vec).
 
 ```bash
+# Using pretrained model (not great because not jobscript terms)
 python scripts/run_top2vec.py
+
+# Build with doc2vec - be careful we set workers and learn mode (slower) here
+# started at 7pm
+python3 scripts/run_top2vec_with_doc2vec.py --speed learn
+python3 scripts/run_top2vec_with_doc2vec.py --speed deep-learn
 ```
+
+And then to explore (finding matches for a subset of words):
+
+```
+python3 scripts/explore_top2vec.py
+python3 scripts/explore_top2vec.py --outname top2vec-jobspec-database-learn.md --model ./scripts/data/combined/wordclouds/top2vec-with-doc2vec-learn.model 
+```
+
 
 For word2vec:
 

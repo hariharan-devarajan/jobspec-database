@@ -18,6 +18,11 @@ def get_parser():
         help="model input file",
         default=os.path.join(here, "data", "combined", "wordclouds", "top2vec.model"),
     )
+    parser.add_argument(
+        "--outname",
+        help="basename of output markdown",
+        default="top2vec-jobspec-database.md",
+    )
     return parser
 
 
@@ -103,7 +108,7 @@ def main():
 
     # returns words, word scores
     outdir = os.path.dirname(args.model)
-    outfile = os.path.join(outdir, "top2vec-jobspec-database.md")
+    outfile = os.path.join(outdir, args.outname)
     not_learned = []
     with open(outfile, "w") as fd:
         fd.write("# GitHub JobSpec Similar Terms\n")

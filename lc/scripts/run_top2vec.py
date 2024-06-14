@@ -12,11 +12,11 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 
 def get_parser():
-    parser = argparse.ArgumentParser(description="word2vec")
+    parser = argparse.ArgumentParser(description="doc2vec")
     parser.add_argument(
         "--input",
         help="tokenized jobspec files",
-        default=os.path.join(here, "data", "combined", "combined-jobspecs.txt"),
+        default=os.path.join(here, "jobspec-corpus.txt"),
     )
     parser.add_argument(
         "--speed",
@@ -38,7 +38,7 @@ def main():
     corpus = [x.strip() for x in utils.read_file(args.input)]
 
     outdir = os.path.dirname(args.input)
-    outdir = os.path.join(outdir, "wordclouds")
+    outdir = os.path.join(outdir, "top2vec")
 
     # Note I was running this on a VM - YOLO
     if not os.path.exists(outdir):
@@ -48,7 +48,9 @@ def main():
     model_path = os.path.join(outdir, f"top2vec-with-doc2vec-{args.speed}.model")
     if not os.path.exists(model_path):
         # Note I ran this on an instance with 32 cores
-        model = Top2Vec(corpus, speed=args.speed, workers=32, embedding_model="doc2vec")
+        model = Top2Vec(
+            corpus, speed=args.speed, workers=192, embedding_model="doc2vec"
+        )
         model.save(model_path)
     else:
         model = Top2Vec.load(model_path)

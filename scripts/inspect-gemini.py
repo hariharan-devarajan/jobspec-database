@@ -42,8 +42,8 @@ def get_parser():
 # Lookup of files
 data_dir = os.path.join(here, "data", "gemini-with-template-processed")
 lookup = {
-# This was too big for GitHub
-#    "all": os.path.join(data_dir, "visual-resource-comparison.json"),
+    # This was too big for GitHub
+    #    "all": os.path.join(data_dir, "visual-resource-comparison.json"),
     "missing": os.path.join(data_dir, "visual-with-missing-resource-comparison.json"),
     "wrong": os.path.join(data_dir, "visual-with-wrong-resource-comparison.json"),
 }

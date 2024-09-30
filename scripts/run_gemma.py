@@ -8,8 +8,6 @@ import pydantic
 import sys
 import time
 from typing import List, Dict
-from colorama import Fore, Back, Style
-from google.api_core.exceptions import DeadlineExceeded
 
 here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(here)
@@ -54,8 +52,7 @@ def model_to_json(model_instance):
 # !pip install -q -U keras-nlp
 # !pip install -q -U keras>=3
 # !pip install jax
-# pip install -q -U google-generativeai colorama
-
+# !pip install -q -U google-generativeai
 
 # This can also be "tensorflow" or "torch".
 os.environ["KERAS_BACKEND"] = "jax"
